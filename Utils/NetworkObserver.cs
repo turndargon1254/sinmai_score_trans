@@ -1,7 +1,11 @@
+using System;
+using System.Reflection;
 using HarmonyLib;
+using Manager;
 using MelonLoader;
 using Net.Packet;
 using Net.Packet.Mai2;
+using Net.VO.Mai2;
 
 namespace SinmaiAssist.Utils
 {
@@ -53,6 +57,35 @@ namespace SinmaiAssist.Utils
             BatchSignals.Logout = ok ? 1 : -1;
             BatchSignals.LastLogoutMessage = $"state={state} status={status} http={__instance.HttpStatus}";
             MelonLogger.Msg($"[ScoreTransfer] UserLogout {(ok ? "OK" : "FAIL")} ({BatchSignals.LastLogoutMessage})");
+        }
+
+        /// <summary>观测实际上传的 playlog 内容（trackNo 是否 1..N 连续）。</summary>
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(VOExtensions), "ExportUserPlaylog", new[] { typeof(UserData), typeof(int), typeof(int) })]
+        public static void ExportPlaylog(ref UserPlaylog __result)
+        {
+            try
+            {
+                MelonLogger.Msg("[ScoreTransfer] ExportUserPlaylog " +
+                                $"trackNo={Get(__result, "trackNo")} musicId={Get(__result, "musicId")} level={Get(__result, "level")} " +
+                                $"achievement={Get(__result, "achievement")} playDate={Get(__result, "playDate")} playlogId={Get(__result, "playlogId")}");
+            }
+            catch (Exception e)
+            {
+                MelonLogger.Warning($"[ScoreTransfer] ExportUserPlaylog log failed: {e.Message}");
+            }
+        }
+
+        private static object Get(object o, string name)
+        {
+            var t = o.GetType();
+            var p = t.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+            if (p != null)
+            {
+                return p.GetValue(o, null);
+            }
+            var f = t.GetField(name, BindingFlags.Public | BindingFlags.Instance);
+            return f?.GetValue(o);
         }
     }
 }
