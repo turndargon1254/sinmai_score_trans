@@ -190,7 +190,6 @@ namespace SinmaiAssist.Cheat
             }
 
             GameManager.SelectScoreType = resolvedScoreType;
-            GameManager.MusicTrackNumber = 1;
 
             try
             {

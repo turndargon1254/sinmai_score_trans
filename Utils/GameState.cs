@@ -138,7 +138,6 @@ namespace SinmaiAssist.Utils
             }
 
             ProcessBase processToRelease = null;
-            bool isContinue = false;
             foreach (object controle in list)
             {
                 ProcessBase process = GetProcess(controle);
@@ -150,13 +149,6 @@ namespace SinmaiAssist.Utils
                 if (PostLoginProcesses.Contains(name))
                 {
                     processToRelease = process;
-                    isContinue = false;
-                    break;
-                }
-                if (name == "Process.ContinueProcess" && AutoContinueEnabled)
-                {
-                    processToRelease = process;
-                    isContinue = true;
                     break;
                 }
             }
@@ -170,10 +162,6 @@ namespace SinmaiAssist.Utils
             {
                 SetNormalMode(true);
                 SetMaxTrack();
-                if (isContinue)
-                {
-                    ResetTrackNumber();
-                }
                 try
                 {
                     manager.SendMessage(new Message(ProcessType.CommonProcess, CommonProcess.MessageID_CreditSub));
@@ -183,50 +171,13 @@ namespace SinmaiAssist.Utils
                     MelonLogger.Warning($"[ScoreTransfer] CreditSub message failed: {e.Message}");
                 }
                 manager.AddProcess(new FadeProcess(Container, processToRelease, new MusicSelectProcess(Container)));
-                MelonLogger.Msg(isContinue ? "[ScoreTransfer] 自动续关" : "[ScoreTransfer] 自动推进到选曲界面");
+                MelonLogger.Msg("[ScoreTransfer] 自动推进到选曲界面");
                 return true;
             }
             catch (Exception e)
             {
                 MelonLogger.Warning($"[ScoreTransfer] 自动推进失败: {e}");
                 return false;
-            }
-        }
-
-        private static bool AutoContinueEnabled
-        {
-            get
-            {
-                try
-                {
-                    return SinmaiAssist.config != null &&
-                           SinmaiAssist.config.ScoreTransfer != null &&
-                           SinmaiAssist.config.ScoreTransfer.AutoContinue;
-                }
-                catch
-                {
-                    return false;
-                }
-            }
-        }
-
-        private static void ResetTrackNumber()
-        {
-            try
-            {
-                Type type = typeof(Manager.GameManager);
-                PropertyInfo prop = type.GetProperty("MusicTrackNumber", BindingFlags.Public | BindingFlags.Static);
-                if (prop != null && prop.CanWrite)
-                {
-                    prop.SetValue(null, 1u);
-                    return;
-                }
-                FieldInfo field = type.GetField("MusicTrackNumber", BindingFlags.Public | BindingFlags.Static);
-                field?.SetValue(null, 1u);
-            }
-            catch (Exception e)
-            {
-                MelonLogger.Warning($"[ScoreTransfer] 重置 TrackNumber 失败: {e.Message}");
             }
         }
 

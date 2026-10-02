@@ -26,7 +26,6 @@ scoreTransfer:
   batchSize: 4            # 每批转移曲目数（舞萌一次游玩上限）
   enterTimeoutSeconds: 120 # 等待进入选歌界面的超时(秒)
   trackTimeoutSeconds: 120 # 等待单曲完成的超时(秒)
-  autoContinue: true      # 自动续关（每批后直接继续下一批）
 dummyLogin:
   enable: true            # 自动登录（刷卡/Chime）
   defaultUserId: 1        # 默认用户ID
