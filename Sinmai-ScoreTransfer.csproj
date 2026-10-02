@@ -95,14 +95,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="config.yml" />
-    <Content Include="BeforeBuild.bat" />
-    <Content Include="PostBuild.bat" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PostBuildEvent>$(ProjectDir)PostBuild.bat</PostBuildEvent>
-  </PropertyGroup>
-  <PropertyGroup>
-    <PreBuildEvent>$(ProjectDir)BeforeBuild.bat</PreBuildEvent>
-  </PropertyGroup>
 </Project>
