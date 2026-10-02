@@ -94,6 +94,7 @@ namespace SinmaiAssist
             "  uploadTimeoutSeconds: 60 # 等待成绩提交(UpsertUserAll)成功的超时(秒)\r\n" +
             "  logoutTimeoutSeconds: 60 # 等待登出(UserLogout)成功的超时(秒)\r\n" +
             "  loginTimeoutSeconds: 120 # 等待回到可登录界面的超时(秒)\r\n" +
+            "  loginWaitSeconds: 120 # 每次登录后停留多少秒再开始转移（服务器需登录约1分钟后才接收上传，建议≥120）\r\n" +
             "dummyLogin: # 自动登录(刷卡)\r\n" +
             "  enable: true # 是否启用\r\n" +
             "  defaultUserId: 1 # 默认用户ID\r\n";
@@ -112,6 +113,7 @@ namespace SinmaiAssist
                 case "uploadTimeoutSeconds": cfg.UploadTimeoutSeconds = ParseFloat(value, cfg.UploadTimeoutSeconds); break;
                 case "logoutTimeoutSeconds": cfg.LogoutTimeoutSeconds = ParseFloat(value, cfg.LogoutTimeoutSeconds); break;
                 case "loginTimeoutSeconds": cfg.LoginTimeoutSeconds = ParseFloat(value, cfg.LoginTimeoutSeconds); break;
+                case "loginWaitSeconds": cfg.LoginWaitSeconds = ParseFloat(value, cfg.LoginWaitSeconds); break;
             }
         }
 
@@ -161,6 +163,7 @@ namespace SinmaiAssist
         public float UploadTimeoutSeconds { get; set; } = 60f;
         public float LogoutTimeoutSeconds { get; set; } = 60f;
         public float LoginTimeoutSeconds { get; set; } = 120f;
+        public float LoginWaitSeconds { get; set; } = 120f;
     }
 
     public class DummyLoginConfig

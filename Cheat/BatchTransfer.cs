@@ -227,6 +227,37 @@ namespace SinmaiAssist.Cheat
                 State = "LoggedIn";
                 Message = "LoggedIn";
                 MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Login success");
+                yield return WaitAfterLogin(session);
+            }
+        }
+
+        /// <summary>
+        /// 登录后停留一段时间再开始转移。官方服务器在登录后约 1 分钟才接收上传（UpsertUserAll），
+        /// 太早结算会被静默丢弃；这里默认停留 loginWaitSeconds 秒。
+        /// </summary>
+        private static IEnumerator WaitAfterLogin(int session)
+        {
+            float seconds = Math.Max(0f, SinmaiAssist.config.ScoreTransfer.LoginWaitSeconds);
+            if (seconds <= 0f)
+            {
+                yield break;
+            }
+
+            State = "LoginWait";
+            Message = "LoginWait";
+            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] 登录后停留 {seconds:0}s 再开始（服务器登录约1分钟后才接收上传）");
+
+            float t = 0f;
+            float nextLog = 30f;
+            while (t < seconds && !_stopRequested)
+            {
+                if (t >= nextLog)
+                {
+                    MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] 登录等待中… 剩余 {seconds - t:0}s");
+                    nextLog += 30f;
+                }
+                t += Time.deltaTime;
+                yield return null;
             }
         }
 

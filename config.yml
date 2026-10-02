@@ -9,6 +9,7 @@
   uploadTimeoutSeconds: 60
   logoutTimeoutSeconds: 60
   loginTimeoutSeconds: 120
+  loginWaitSeconds: 120
 dummyLogin:
   enable: true
   defaultUserId: 1
