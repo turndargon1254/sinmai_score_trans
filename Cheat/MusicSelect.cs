@@ -104,10 +104,16 @@ namespace SinmaiAssist.Cheat
             for (int i = 0; i < list.Count; i++)
             {
                 ReadOnlyCollection<MusicSelectProcess.CombineMusicSelectData> category = list[i];
-                MusicSelectProcess.CombineMusicSelectData data = category.FirstOrDefault(it => it.msDetailData.musicId == id);
-                if (data == null)
+                MusicSelectProcess.CombineMusicSelectData data = null;
+                int matchedId = 0;
+                foreach (int candidate in GetIdCandidates(id))
                 {
-                    data = category.FirstOrDefault(it => it.msDetailData.musicId == id % 10000);
+                    data = category.FirstOrDefault(it => it.msDetailData != null && it.msDetailData.musicId == candidate);
+                    if (data != null)
+                    {
+                        matchedId = data.msDetailData.musicId;
+                        break;
+                    }
                 }
 
                 if (data != null)
@@ -115,7 +121,7 @@ namespace SinmaiAssist.Cheat
                     int index = list[i].IndexOf(data);
                     Process.CurrentCategorySelect = i;
                     Process.CurrentMusicSelect = index;
-                    Process.ScoreType = (MAI2System.ConstParameter.ScoreKind)(id < 10000 ? 0 : 1);
+                    Process.ScoreType = (MAI2System.ConstParameter.ScoreKind)(matchedId < 10000 ? 0 : 1);
                     Process.ChangeBGM();
 
                     for (int j = 0; j < Process.MonitorArray.Length; j++)
@@ -133,6 +139,28 @@ namespace SinmaiAssist.Cheat
                 }
             }
             return "找不到这首歌";
+        }
+
+        /// <summary>
+        /// 依次尝试完整 id、其标准/DX 对应 id（±10000），以兼容曲库中只存在另一种谱面类型的曲目。
+        /// </summary>
+        private static IEnumerable<int> GetIdCandidates(int id)
+        {
+            HashSet<int> seen = new HashSet<int>();
+            if (seen.Add(id))
+            {
+                yield return id;
+            }
+            int baseId = id >= 10000 ? id - 10000 : id;
+            if (baseId > 0 && seen.Add(baseId))
+            {
+                yield return baseId;
+            }
+            int dxId = id >= 10000 ? id : id + 10000;
+            if (seen.Add(dxId))
+            {
+                yield return dxId;
+            }
         }
 
         private static IEnumerator NextFrame(int playerIndex)

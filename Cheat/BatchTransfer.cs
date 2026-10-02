@@ -37,6 +37,8 @@ namespace SinmaiAssist.Cheat
         private static List<TransferItem> _pendingItems;
         private static bool _lastWaitOk;
         private static bool _sessionEnded;
+        private static bool _sessionPlayedAnyTrack;
+        private static TransferItem _lastPlayedItem;
         private static float _lastLogTime;
 
         private static void LogSnapshot(string tag)
@@ -134,7 +136,6 @@ namespace SinmaiAssist.Cheat
             int session = 0;
             bool sessionOpen = false;
             int songsInSession = 0;
-            TransferItem lastItem = null;
             bool aborted = false;
 
             for (int i = 0; i < items.Count; i++)
@@ -146,7 +147,6 @@ namespace SinmaiAssist.Cheat
                 }
 
                 TransferItem item = items[i];
-                lastItem = item;
 
                 if (!sessionOpen)
                 {
@@ -166,6 +166,11 @@ namespace SinmaiAssist.Cheat
                 songsInSession++;
                 yield return ProcessItem(item, session, songsInSession, batchSize, enterTimeout, trackTimeout);
                 UpdateCounters();
+                if (item.status == "Done")
+                {
+                    _sessionPlayedAnyTrack = true;
+                    _lastPlayedItem = item;
+                }
 
                 if (_sessionEnded)
                 {
@@ -175,16 +180,21 @@ namespace SinmaiAssist.Cheat
                 }
             }
 
-            // 本局还剩 Track：重复最后一首直到结算（不硬编码 Track 数）
-            if (!aborted && sessionOpen && !_stopRequested && lastItem != null &&
+            // 本局还剩 Track：重复最后一首成功开始的曲目直到结算（不硬编码 Track 数）
+            if (!aborted && sessionOpen && !_stopRequested && _sessionPlayedAnyTrack && _lastPlayedItem != null &&
                 SinmaiAssist.config.ScoreTransfer.FillRemainingTracks)
             {
                 int guard = 0;
                 while (!_sessionEnded && !_stopRequested && guard < 10)
                 {
                     songsInSession++;
-                    TransferItem repeat = Clone(lastItem, "补");
+                    TransferItem repeat = Clone(_lastPlayedItem, "补");
                     yield return ProcessItem(repeat, session, songsInSession, batchSize, enterTimeout, trackTimeout);
+                    if (repeat.status != "Done")
+                    {
+                        // 连已成功开始的曲目都无法再次进入，说明状态异常，停止补曲，避免死循环
+                        break;
+                    }
                     guard++;
                 }
                 if (_sessionEnded)
@@ -206,6 +216,8 @@ namespace SinmaiAssist.Cheat
             CurrentBatch = session;
             State = "LoggingIn";
             Message = "LoggingIn";
+            _sessionPlayedAnyTrack = false;
+            _lastPlayedItem = null;
             MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Login（等待进入选歌/登录界面）");
 
             yield return EnsureMusicSelect(enterTimeout);
