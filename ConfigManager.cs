@@ -80,6 +80,9 @@ namespace SinmaiAssist
                 case "enterTimeoutSeconds": cfg.EnterTimeoutSeconds = ParseFloat(value, cfg.EnterTimeoutSeconds); break;
                 case "trackTimeoutSeconds": cfg.TrackTimeoutSeconds = ParseFloat(value, cfg.TrackTimeoutSeconds); break;
                 case "fillRemainingTracks": cfg.FillRemainingTracks = ParseBool(value); break;
+                case "uploadTimeoutSeconds": cfg.UploadTimeoutSeconds = ParseFloat(value, cfg.UploadTimeoutSeconds); break;
+                case "logoutTimeoutSeconds": cfg.LogoutTimeoutSeconds = ParseFloat(value, cfg.LogoutTimeoutSeconds); break;
+                case "loginTimeoutSeconds": cfg.LoginTimeoutSeconds = ParseFloat(value, cfg.LoginTimeoutSeconds); break;
             }
         }
 
@@ -125,6 +128,9 @@ namespace SinmaiAssist
         public float EnterTimeoutSeconds { get; set; } = 120f;
         public float TrackTimeoutSeconds { get; set; } = 120f;
         public bool FillRemainingTracks { get; set; } = true;
+        public float UploadTimeoutSeconds { get; set; } = 60f;
+        public float LogoutTimeoutSeconds { get; set; } = 60f;
+        public float LoginTimeoutSeconds { get; set; } = 120f;
     }
 
     public class DummyLoginConfig

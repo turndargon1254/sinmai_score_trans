@@ -15,9 +15,11 @@ using Type = System.Type;
 namespace SinmaiAssist.Cheat
 {
     /// <summary>
-    /// 批次处理器：把待转移成绩按每批最多 4 首（可配置）拆分，
-    /// 自动完成登录/进入选曲、逐首转移、批间自动重新进入，直到全部处理完成。
-    /// 所有状态判断均基于当前游戏流程（<see cref="GameState"/>），不使用固定 Sleep。
+    /// 批次处理器（以“游戏 Session”为准，不硬编码 Track 数）：
+    ///   Login → 逐首转移 → 每首等待 Result → 当本局结束(结算)时：
+    ///   WaitingSettlement → 观测 UpsertUserAll 成功 → LoggingOut → 观测 UserLogout 成功 →
+    ///   LoggedOut(等待回到可登录界面) → 下一批。
+    /// 所有判断基于游戏 Process/网络状态，不使用固定 Sleep，不伪造任何 API 返回值。
     /// </summary>
     public static class BatchTransfer
     {
@@ -34,6 +36,7 @@ namespace SinmaiAssist.Cheat
         private static volatile bool _stopRequested;
         private static List<TransferItem> _pendingItems;
         private static bool _lastWaitOk;
+        private static bool _sessionEnded;
         private static float _lastLogTime;
 
         private static void LogSnapshot(string tag)
@@ -44,7 +47,7 @@ namespace SinmaiAssist.Cheat
                 return;
             }
             _lastLogTime = now;
-            MelonLogger.Msg($"[ScoreTransfer] {tag} · {GameState.Snapshot()}");
+            MelonLogger.Msg($"[ScoreTransfer] {tag} · {GameState.Snapshot()} · upsert={BatchSignals.Upsert} logout={BatchSignals.Logout}");
         }
 
         public static bool RequestStart(List<TransferItem> items, out string error)
@@ -114,90 +117,183 @@ namespace SinmaiAssist.Cheat
             Items = items;
             CompletedCount = 0;
             FailedCount = 0;
+            State = "Idle";
+            Message = "";
             _stopRequested = false;
 
             int batchSize = Math.Max(1, SinmaiAssist.config.ScoreTransfer.BatchSize);
             float enterTimeout = Math.Max(5f, SinmaiAssist.config.ScoreTransfer.EnterTimeoutSeconds);
             float trackTimeout = Math.Max(5f, SinmaiAssist.config.ScoreTransfer.TrackTimeoutSeconds);
+            float uploadTimeout = Math.Max(5f, SinmaiAssist.config.ScoreTransfer.UploadTimeoutSeconds);
+            float logoutTimeout = Math.Max(5f, SinmaiAssist.config.ScoreTransfer.LogoutTimeoutSeconds);
+            float loginTimeout = Math.Max(5f, SinmaiAssist.config.ScoreTransfer.LoginTimeoutSeconds);
 
-            List<List<TransferItem>> batches = Split(items, batchSize);
-            TotalBatches = batches.Count;
-            MelonLogger.Msg($"[ScoreTransfer] 批次任务开始，共 {items.Count} 首 / {TotalBatches} 批");
+            TotalBatches = (items.Count + batchSize - 1) / batchSize;
+            MelonLogger.Msg($"[ScoreTransfer] 任务开始：共 {items.Count} 首 / 预计 {TotalBatches} 批 (每批最多 {batchSize})");
 
-            for (int b = 0; b < batches.Count; b++)
+            int session = 0;
+            bool sessionOpen = false;
+            int songsInSession = 0;
+            TransferItem lastItem = null;
+            bool aborted = false;
+
+            for (int i = 0; i < items.Count; i++)
             {
-                CurrentBatch = b + 1;
-                State = $"Batch {CurrentBatch}/{TotalBatches}";
-                Message = "";
-                List<TransferItem> batch = batches[b];
-
-                for (int i = 0; i < batch.Count; i++)
+                if (_stopRequested)
                 {
-                    TransferItem item = batch[i];
-                    item.batchIndex = CurrentBatch;
-
-                    if (_stopRequested)
-                    {
-                        item.MarkSkipped("已手动停止");
-                        continue;
-                    }
-
-                    Message = $"批 {CurrentBatch}/{TotalBatches} · 曲目 {item.musicId}";
-                    State = $"Batch {CurrentBatch}/{TotalBatches} - Selecting {i + 1}/{batch.Count}";
-
-                    // 1. 等待进入选曲界面，必要时自动完成登录/进入流程
-                    yield return EnsureMusicSelect(enterTimeout);
-                    if (!_lastWaitOk)
-                    {
-                        item.MarkFailed("无法进入选歌界面（超时）");
-                        UpdateCounters();
-                        continue;
-                    }
-
-                    // 2. 记录原完成度
-                    item.originalAchievement = GetAchievement(item.musicId, item.difficulty);
-                    if (string.IsNullOrEmpty(item.name))
-                    {
-                        item.name = LookupName(item.musicId);
-                    }
-
-                    // 3. 复用单曲转移
-                    item.MarkRunning();
-                    yield return RunSingle(item, enterTimeout, trackTimeout);
-                    UpdateCounters();
-
-                    if (item.status == "Failed")
-                    {
-                        MelonLogger.Warning($"[ScoreTransfer] [FAILED] {item.name} / {item.musicId} / " +
-                                            $"difficulty {item.difficulty} / target {item.targetAchievement:0.0000}% : {item.error}");
-                    }
-                    else if (item.status == "Done")
-                    {
-                        MelonLogger.Msg($"[ScoreTransfer] [OK] {item.name} / {item.musicId} / " +
-                                        $"difficulty {item.difficulty} / {item.originalAchievement / 10000m:0.0000}% -> {item.targetAchievement:0.0000}%");
-                    }
+                    items[i].MarkSkipped("已手动停止");
+                    continue;
                 }
 
-                State = $"Batch {CurrentBatch}/{TotalBatches} 完成";
+                TransferItem item = items[i];
+                lastItem = item;
+
+                if (!sessionOpen)
+                {
+                    session++;
+                    yield return OpenSession(session, enterTimeout);
+                    if (!_lastWaitOk)
+                    {
+                        item.MarkFailed("无法进入选歌界面（登录/进入游戏失败，超时）");
+                        UpdateCounters();
+                        aborted = true;
+                        break;
+                    }
+                    sessionOpen = true;
+                    songsInSession = 0;
+                }
+
+                songsInSession++;
+                yield return ProcessItem(item, session, songsInSession, batchSize, enterTimeout, trackTimeout);
+                UpdateCounters();
+
+                if (_sessionEnded)
+                {
+                    yield return HandleSessionEnd(session, uploadTimeout, logoutTimeout, loginTimeout);
+                    sessionOpen = false;
+                }
             }
 
-            // 所有计划曲目处理完后：若本局尚未结束（游戏又回到选曲界面，说明还剩 Track），
-            // 就用最后一首重复传分，直到游戏进入结算/本局结束（登出）。
-            if (!_stopRequested && items.Count > 0 && SinmaiAssist.config.ScoreTransfer.FillRemainingTracks)
+            // 本局还剩 Track：重复最后一首直到结算（不硬编码 Track 数）
+            if (!aborted && sessionOpen && !_stopRequested && lastItem != null &&
+                SinmaiAssist.config.ScoreTransfer.FillRemainingTracks)
             {
-                yield return FillRemainingTracks(items[items.Count - 1], enterTimeout, trackTimeout);
+                int guard = 0;
+                while (!_sessionEnded && !_stopRequested && guard < 10)
+                {
+                    songsInSession++;
+                    TransferItem repeat = Clone(lastItem, "补");
+                    yield return ProcessItem(repeat, session, songsInSession, batchSize, enterTimeout, trackTimeout);
+                    guard++;
+                }
+                if (_sessionEnded)
+                {
+                    yield return HandleSessionEnd(session, uploadTimeout, logoutTimeout, loginTimeout);
+                    sessionOpen = false;
+                }
             }
 
-            State = "Completed";
-            Message = _stopRequested ? "已停止" : "全部完成";
+            State = "Finished";
+            Message = _stopRequested ? "已停止" : (aborted ? "因错误中止" : "全部完成");
             ResultAdvancer.Enabled = false;
             Running = false;
-            MelonLogger.Msg($"[ScoreTransfer] 批次任务结束：成功 {CompletedCount}，失败 {FailedCount}");
+            MelonLogger.Msg($"[ScoreTransfer] 任务结束：成功 {CompletedCount}，失败 {FailedCount}");
+        }
+
+        private static IEnumerator OpenSession(int session, float enterTimeout)
+        {
+            CurrentBatch = session;
+            State = "LoggingIn";
+            Message = "LoggingIn";
+            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Login（等待进入选歌/登录界面）");
+
+            yield return EnsureMusicSelect(enterTimeout);
+
+            if (_lastWaitOk)
+            {
+                State = "LoggedIn";
+                Message = "LoggedIn";
+                MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Login success");
+            }
+        }
+
+        private static IEnumerator ProcessItem(TransferItem item, int session, int indexInSession, int batchSize, float enterTimeout, float trackTimeout)
+        {
+            State = "EnteringPlay";
+            Message = $"EnteringPlay {item.musicId}";
+            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] [{indexInSession}/{batchSize}] Enter song {item.musicId} (difficulty {item.difficulty}, target {item.targetAchievement:0.0000}%)");
+
+            item.originalAchievement = GetAchievement(item.musicId, item.difficulty);
+            if (string.IsNullOrEmpty(item.name))
+            {
+                item.name = LookupName(item.musicId);
+            }
+
+            item.MarkRunning();
+            yield return RunSingle(item, enterTimeout, trackTimeout);
+            UpdateCounters();
+
+            if (item.status == "Failed")
+            {
+                MelonLogger.Warning($"[ScoreTransfer] [Batch {session}] [{indexInSession}/{batchSize}] FAILED {item.name} / {item.musicId} / " +
+                                    $"difficulty {item.difficulty} / target {item.targetAchievement:0.0000}% : {item.error}");
+            }
+            else if (item.status == "Done")
+            {
+                State = "WaitingResult";
+                Message = "WaitingResult";
+                MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] [{indexInSession}/{batchSize}] Result done · " +
+                                $"{item.originalAchievement / 10000m:0.0000}% -> {item.targetAchievement:0.0000}%");
+            }
+        }
+
+        private static IEnumerator HandleSessionEnd(int session, float uploadTimeout, float logoutTimeout, float loginTimeout)
+        {
+            State = "WaitingSettlement";
+            Message = "WaitingSettlement";
+            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Waiting for settlement");
+
+            // 1. 观测成绩提交 (UpsertUserAll)
+            State = "UploadingResult";
+            yield return WaitSignal(() => BatchSignals.Upsert != 0, uploadTimeout);
+            if (BatchSignals.Upsert > 0)
+            {
+                MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Result upload success ({BatchSignals.LastUpsertMessage})");
+            }
+            else
+            {
+                MelonLogger.Warning($"[ScoreTransfer] [Batch {session}] Result upload NOT confirmed ({BatchSignals.LastUpsertMessage})");
+            }
+
+            // 2. 观测登出 (UserLogout)
+            State = "LoggingOut";
+            Message = "LoggingOut";
+            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Logging out");
+            yield return WaitSignal(() => BatchSignals.Logout != 0, logoutTimeout);
+            if (BatchSignals.Logout > 0)
+            {
+                MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] UserLogoutApi success ({BatchSignals.LastLogoutMessage})");
+            }
+            else
+            {
+                MelonLogger.Warning($"[ScoreTransfer] [Batch {session}] UserLogout NOT confirmed ({BatchSignals.LastLogoutMessage})");
+            }
+
+            // 3. 确认客户端已回到可重新登录状态（Entry 界面）
+            State = "LoggedOut";
+            Message = "LoggedOut";
+            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Logged out，等待可登录界面");
+            yield return WaitEntry(loginTimeout);
+
+            BatchSignals.Reset();
+            State = "StartingNextBatch";
+            Message = "StartingNextBatch";
         }
 
         private static IEnumerator RunSingle(TransferItem item, float enterTimeout, float trackTimeout)
         {
-            // 等待上一个任务完全结束
+            _sessionEnded = false;
+
             float waited = 0f;
             while (ScoreTransfer.IsBusy && waited < enterTimeout)
             {
@@ -225,7 +321,6 @@ namespace SinmaiAssist.Cheat
                     item.MarkDone();
                     break;
                 }
-                LogSnapshot("等待曲目完成");
                 t += Time.deltaTime;
                 yield return null;
             }
@@ -233,12 +328,10 @@ namespace SinmaiAssist.Cheat
             if (!item.IsFinished)
             {
                 item.MarkFailed("等待曲目完成超时");
+                yield break;
             }
 
-            if (item.status == "Done")
-            {
-                yield return WaitAfterTrack(trackTimeout);
-            }
+            yield return WaitAfterTrack(trackTimeout);
         }
 
         private static IEnumerator EnsureMusicSelect(float timeout)
@@ -259,54 +352,21 @@ namespace SinmaiAssist.Cheat
             _lastWaitOk = GameState.IsMusicSelect && MusicSelect.IsReady;
         }
 
-        private static IEnumerator FillRemainingTracks(TransferItem last, float enterTimeout, float trackTimeout)
-        {
-            int safety = 0;
-            while (safety < 10)
-            {
-                if (GameState.IsSessionEnding)
-                {
-                    MelonLogger.Msg("[ScoreTransfer] 本局已结束（进入结算/登出），停止补曲");
-                    yield break;
-                }
-
-                State = "补足剩余 Track";
-                yield return EnsureMusicSelect(enterTimeout);
-                if (!_lastWaitOk)
-                {
-                    MelonLogger.Warning("[ScoreTransfer] 补曲：无法进入选曲界面");
-                    yield break;
-                }
-                if (GameState.IsSessionEnding)
-                {
-                    yield break;
-                }
-
-                TransferItem repeat = new TransferItem
-                {
-                    musicId = last.musicId,
-                    scoreType = last.scoreType,
-                    difficulty = last.difficulty,
-                    targetAchievement = last.targetAchievement,
-                    name = last.name,
-                    batchIndex = last.batchIndex
-                };
-                repeat.MarkRunning();
-                MelonLogger.Msg($"[ScoreTransfer] 补足剩余 Track：重复最后一首 {repeat.musicId} (难度 {repeat.difficulty})");
-                yield return RunSingle(repeat, enterTimeout, trackTimeout);
-                safety++;
-            }
-            MelonLogger.Warning("[ScoreTransfer] 补曲达到上限，停止");
-        }
-
         private static IEnumerator WaitAfterTrack(float timeout)
         {
             float t = 0f;
             while (t < timeout)
             {
-                if (GameState.IsMusicSelect || GameState.IsSessionEnding)
+                if (GameState.IsSessionEnding)
                 {
                     _lastWaitOk = true;
+                    _sessionEnded = true;
+                    yield break;
+                }
+                if (GameState.IsMusicSelect)
+                {
+                    _lastWaitOk = true;
+                    _sessionEnded = false;
                     yield break;
                 }
                 LogSnapshot("等待 Track 结束");
@@ -316,19 +376,48 @@ namespace SinmaiAssist.Cheat
             _lastWaitOk = false;
         }
 
-        private static List<List<TransferItem>> Split(List<TransferItem> items, int batchSize)
+        private static IEnumerator WaitSignal(Func<bool> predicate, float timeout)
         {
-            List<List<TransferItem>> result = new List<List<TransferItem>>();
-            for (int i = 0; i < items.Count; i += batchSize)
+            float t = 0f;
+            while (t < timeout)
             {
-                List<TransferItem> batch = new List<TransferItem>();
-                for (int j = i; j < i + batchSize && j < items.Count; j++)
+                if (predicate())
                 {
-                    batch.Add(items[j]);
+                    yield break;
                 }
-                result.Add(batch);
+                LogSnapshot("等待网络确认");
+                t += Time.deltaTime;
+                yield return null;
             }
-            return result;
+        }
+
+        private static IEnumerator WaitEntry(float timeout)
+        {
+            float t = 0f;
+            while (t < timeout)
+            {
+                if (GameState.HasProcess("Process.EntryProcess") ||
+                    GameState.HasProcess("Process.Entry.EntryProcess"))
+                {
+                    yield break;
+                }
+                LogSnapshot("等待可登录界面");
+                t += Time.deltaTime;
+                yield return null;
+            }
+        }
+
+        private static TransferItem Clone(TransferItem src, string suffix)
+        {
+            return new TransferItem
+            {
+                musicId = src.musicId,
+                scoreType = src.scoreType,
+                difficulty = src.difficulty,
+                targetAchievement = src.targetAchievement,
+                name = string.IsNullOrEmpty(src.name) ? "" : src.name + "(" + suffix + ")",
+                batchIndex = src.batchIndex
+            };
         }
 
         private static string LookupName(int musicId)

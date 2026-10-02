@@ -5,6 +5,9 @@
   enterTimeoutSeconds: 120
   trackTimeoutSeconds: 120
   fillRemainingTracks: true
+  uploadTimeoutSeconds: 60
+  logoutTimeoutSeconds: 60
+  loginTimeoutSeconds: 120
 dummyLogin:
   enable: true
   defaultUserId: 1

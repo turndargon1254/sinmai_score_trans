@@ -5,6 +5,9 @@
   enterTimeoutSeconds: 120 # 等待进入选歌界面的超时时间(秒)
   trackTimeoutSeconds: 120 # 等待单曲完成的超时时间(秒)
   fillRemainingTracks: true # 最后一首打完后若本局还有剩余 Track，则重复最后一首直到结算/登出
+  uploadTimeoutSeconds: 60 # 等待成绩提交(UpsertUserAll)成功的超时时间(秒)
+  logoutTimeoutSeconds: 60 # 等待登出(UserLogout)成功的超时时间(秒)
+  loginTimeoutSeconds: 120 # 等待回到可登录界面的超时时间(秒)
 dummyLogin: # 自动登录(刷卡)
   enable: true # 是否启用
   defaultUserId: 1 # 默认用户ID

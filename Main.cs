@@ -101,6 +101,7 @@ namespace SinmaiAssist
             // 分数转移核心
             Patch(typeof(AchievementSetter));
             Patch(typeof(ResultAdvancer));
+            Patch(typeof(NetworkObserver));
             Patch(typeof(MusicSelect));
             Patch(typeof(ScoreTransfer));
             Patch(typeof(GameState));

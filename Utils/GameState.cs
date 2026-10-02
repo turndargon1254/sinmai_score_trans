@@ -56,6 +56,7 @@ namespace SinmaiAssist.Utils
             "Process.GameOverProcess",
             "Process.PhotoEditProcess",
             "Process.DataSaveProcess",
+            "Process.EntryProcess",
             "Process.Entry.EntryProcess",
             "Process.ModeSelect.ModeSelectProcess",
             "Process.LoginBonus.LoginBonusProcess",
