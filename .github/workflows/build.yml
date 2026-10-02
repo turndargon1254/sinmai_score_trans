@@ -30,14 +30,24 @@ jobs:
           choco install 7zip.install -y
           New-Item -ItemType Directory -Force -Path cache | Out-Null
 
-          # MelonLoader (for MelonLoader.dll etc.)
-          Invoke-WebRequest -Uri https://github.com/LavaGang/MelonLoader/releases/download/v0.6.5/MelonLoader.x64.zip -OutFile "$(Get-Location)\cache\MelonLoader.x64.zip"
-          7z x "$(Get-Location)\cache\MelonLoader.x64.zip" -o"$(Get-Location)\Out"
+          $outputUrl = "${{ secrets.OUTPUT_URL }}"
+          if ([string]::IsNullOrWhiteSpace($outputUrl)) {
+            throw "Repository secret OUTPUT_URL is not set. It must point to a .7z archive containing the game build dependencies (Assembly-CSharp.dll, 0Harmony.dll, MelonLoader.dll, AMDaemon.NET.dll, ChimeLib.NET.dll, UnityEngine*.dll, ...)."
+          }
 
-          # Game / mod build dependencies (Assembly-CSharp.dll, 0Harmony.dll, ...)
-          # Provided through the OUTPUT_URL repository secret.
-          Invoke-WebRequest -Uri "${{ secrets.OUTPUT_URL }}" -OutFile "$(Get-Location)\cache\Output.7z"
-          7z x "$(Get-Location)\cache\Output.7z" -o"$(Get-Location)\Output"
+          # MelonLoader runtime/build assemblies (for MelonLoader.dll etc.)
+          Invoke-WebRequest -Uri https://github.com/LavaGang/MelonLoader/releases/download/v0.6.5/MelonLoader.x64.zip -OutFile "$(Get-Location)\cache\MelonLoader.x64.zip"
+          7z x "$(Get-Location)\cache\MelonLoader.x64.zip" -o"$(Get-Location)\cache\MelonLoader" -y
+
+          # Game / mod build dependencies, provided through the OUTPUT_URL repository secret.
+          Invoke-WebRequest -Uri $outputUrl -OutFile "$(Get-Location)\cache\Output.7z"
+          7z x "$(Get-Location)\cache\Output.7z" -o"$(Get-Location)\Output" -y
+
+          # The project references dependencies through Libs\. Populate Libs from whatever
+          # the archives contain so both Output\ and Libs\ hint paths resolve.
+          New-Item -ItemType Directory -Force -Path Libs | Out-Null
+          Get-ChildItem -Path Output, "$(Get-Location)\cache\MelonLoader" -Recurse -Filter *.dll -ErrorAction SilentlyContinue |
+            Copy-Item -Destination Libs -Force
 
           $commitHash = "NOT SET"
           if (git --version 2>$null) { $commitHash = git rev-parse --short HEAD }
