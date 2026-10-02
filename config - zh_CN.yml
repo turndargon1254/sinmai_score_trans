@@ -12,12 +12,3 @@
 dummyLogin: # 自动登录(刷卡)
   enable: true # 是否启用
   defaultUserId: 1 # 默认用户ID
-fix: # 启动/联网相关修复（默认关闭；仅在你不用 AquaMai 时才需要开）
-  enable: false # 是否启用
-  disableEnvironmentCheck: true # 禁用运行环境检查(WarningProcess)
-  disableEncryption: false # 禁用加密(仅私服需要)
-  disableReboot: false # 禁用维护/自动重启
-  fixCheckAuth: false # 修复 CheckAuth(仅私服需要)
-  skipCakeHashCheck: false # 跳过 Cake.dll Hash 检查
-  skipSpecialNumCheck: false # 跳过特殊数字检查
-  skipVersionCheck: false # 登录时跳过版本检查

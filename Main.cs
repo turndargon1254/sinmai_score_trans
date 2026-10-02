@@ -6,7 +6,6 @@ using System.Reflection;
 using MAI2System;
 using MelonLoader;
 using SinmaiAssist.Cheat;
-using SinmaiAssist.Fix;
 using SinmaiAssist.GUI;
 using SinmaiAssist.Utils;
 using UnityEngine;
@@ -81,18 +80,6 @@ namespace SinmaiAssist
 
             var codes = new List<int> { 83, 68, 71, 66 };
             Flag1 = gameID.Equals(string.Concat(codes.Select(code => (char)code)));
-
-            // 启动相关底层修复（环境检测/加密/版本检查等）——与分数转移无关，但 1.56 上可能需要。
-            if (config.Fix != null && config.Fix.Enable)
-            {
-                if (config.Fix.DisableEnvironmentCheck) Patch(typeof(DisableEnvironmentCheck));
-                if (config.Fix.DisableReboot) Patch(typeof(DisableReboot));
-                if (config.Fix.FixCheckAuth) Patch(typeof(FixCheckAuth));
-                if (config.Fix.SkipCakeHashCheck) Patch(typeof(SkipCakeHashCheck));
-                if (config.Fix.SkipSpecialNumCheck) Patch(typeof(SkipSpecialNumCheck));
-                if (config.Fix.SkipVersionCheck) Patch(typeof(SkipVersionCheck));
-                if (config.Fix.DisableEncryption) Patch(typeof(DisableEncryption));
-            }
 
             if (config.ScoreTransfer == null || !config.ScoreTransfer.Enable)
             {

@@ -13,8 +13,7 @@ namespace SinmaiAssist
         private Config _config = new Config
         {
             ScoreTransfer = new ScoreTransferConfig(),
-            DummyLogin = new DummyLoginConfig(),
-            Fix = new FixConfig()
+            DummyLogin = new DummyLoginConfig()
         };
 
         public void Initialize(string yamlFilePath)
@@ -22,8 +21,7 @@ namespace SinmaiAssist
             Config config = new Config
             {
                 ScoreTransfer = new ScoreTransferConfig(),
-                DummyLogin = new DummyLoginConfig(),
-                Fix = new FixConfig()
+                DummyLogin = new DummyLoginConfig()
             };
 
             string section = null;
@@ -63,9 +61,6 @@ namespace SinmaiAssist
                     case "dummyLogin":
                         ApplyDummyLogin(config.DummyLogin, key, value);
                         break;
-                    case "fix":
-                        ApplyFix(config.Fix, key, value);
-                        break;
                 }
             }
 
@@ -74,7 +69,6 @@ namespace SinmaiAssist
 
         public ScoreTransferConfig ScoreTransfer => _config.ScoreTransfer;
         public DummyLoginConfig DummyLogin => _config.DummyLogin;
-        public FixConfig Fix => _config.Fix;
 
         /// <summary>当配置文件不存在时，生成一份带注释的默认配置。</summary>
         public static void WriteDefault(string path)
@@ -102,16 +96,7 @@ namespace SinmaiAssist
             "  loginTimeoutSeconds: 120 # 等待回到可登录界面的超时(秒)\r\n" +
             "dummyLogin: # 自动登录(刷卡)\r\n" +
             "  enable: true # 是否启用\r\n" +
-            "  defaultUserId: 1 # 默认用户ID\r\n" +
-            "fix: # 启动/联网相关修复（默认关闭；仅在你不用 AquaMai 时才需要开）\r\n" +
-            "  enable: false # 是否启用\r\n" +
-            "  disableEnvironmentCheck: true # 禁用运行环境检查(WarningProcess)\r\n" +
-            "  disableEncryption: false # 禁用加密(官方服必须 false)\r\n" +
-            "  disableReboot: false # 禁用维护/自动重启\r\n" +
-            "  fixCheckAuth: false # 修复 CheckAuth(官方服必须 false)\r\n" +
-            "  skipCakeHashCheck: false # 跳过 Cake.dll Hash 检查(官方服必须 false)\r\n" +
-            "  skipSpecialNumCheck: false # 跳过特殊数字检查(官方服必须 false)\r\n" +
-            "  skipVersionCheck: false # 登录时跳过版本检查(官方服必须 false)\r\n";
+            "  defaultUserId: 1 # 默认用户ID\r\n";
 
         private static void ApplyScoreTransfer(ScoreTransferConfig cfg, string key, string value)
         {
@@ -139,21 +124,6 @@ namespace SinmaiAssist
             }
         }
 
-        private static void ApplyFix(FixConfig cfg, string key, string value)
-        {
-            switch (key)
-            {
-                case "enable": cfg.Enable = ParseBool(value); break;
-                case "disableEnvironmentCheck": cfg.DisableEnvironmentCheck = ParseBool(value); break;
-                case "disableEncryption": cfg.DisableEncryption = ParseBool(value); break;
-                case "disableReboot": cfg.DisableReboot = ParseBool(value); break;
-                case "fixCheckAuth": cfg.FixCheckAuth = ParseBool(value); break;
-                case "skipCakeHashCheck": cfg.SkipCakeHashCheck = ParseBool(value); break;
-                case "skipSpecialNumCheck": cfg.SkipSpecialNumCheck = ParseBool(value); break;
-                case "skipVersionCheck": cfg.SkipVersionCheck = ParseBool(value); break;
-            }
-        }
-
         private static bool ParseBool(string value)
         {
             return value.Equals("true", StringComparison.OrdinalIgnoreCase)
@@ -177,7 +147,6 @@ namespace SinmaiAssist
     {
         public ScoreTransferConfig ScoreTransfer { get; set; }
         public DummyLoginConfig DummyLogin { get; set; }
-        public FixConfig Fix { get; set; }
     }
 
     public class ScoreTransferConfig
@@ -198,17 +167,5 @@ namespace SinmaiAssist
     {
         public bool Enable { get; set; }
         public int DefaultUserId { get; set; } = 1;
-    }
-
-    public class FixConfig
-    {
-        public bool Enable { get; set; } = false;
-        public bool DisableEnvironmentCheck { get; set; } = true;
-        public bool DisableEncryption { get; set; } = false;
-        public bool DisableReboot { get; set; } = false;
-        public bool FixCheckAuth { get; set; } = false;
-        public bool SkipCakeHashCheck { get; set; } = false;
-        public bool SkipSpecialNumCheck { get; set; } = false;
-        public bool SkipVersionCheck { get; set; } = false;
     }
 }

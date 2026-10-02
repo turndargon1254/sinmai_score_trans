@@ -12,12 +12,3 @@
 dummyLogin:
   enable: true
   defaultUserId: 1
-fix:
-  enable: false
-  disableEnvironmentCheck: true
-  disableEncryption: false
-  disableReboot: false
-  fixCheckAuth: false
-  skipCakeHashCheck: false
-  skipSpecialNumCheck: false
-  skipVersionCheck: false
