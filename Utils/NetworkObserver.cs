@@ -67,6 +67,19 @@ namespace SinmaiAssist.Utils
             MelonLogger.Msg($"[ScoreTransfer] UserLogout {(ok ? "OK" : "FAIL")} ({BatchSignals.LastLogoutMessage})");
         }
 
+        /// <summary>观测单曲 playlog 上送（正常游玩会走这条；跳关是否走它可据此判断）。</summary>
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(PacketUploadUserPlaylog), "Proc")]
+        public static void UploadPlaylogProc(PacketUploadUserPlaylog __instance, PacketState __result)
+        {
+            int state = (int)__result;
+            if (state != 2 && state != 5)
+            {
+                return;
+            }
+            MelonLogger.Msg($"[ScoreTransfer] UploadUserPlaylog state={state} status={(int)__instance.Status} http={__instance.HttpStatus}");
+        }
+
         /// <summary>观测实际上传的 playlog 内容（trackNo 是否 1..N 连续）。</summary>
         [HarmonyPostfix]
         [HarmonyPatch(typeof(VOExtensions), "ExportUserPlaylog", new[] { typeof(UserData), typeof(int), typeof(int) })]

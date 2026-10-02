@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.IO;
 
@@ -13,7 +13,8 @@ namespace SinmaiAssist
         private Config _config = new Config
         {
             ScoreTransfer = new ScoreTransferConfig(),
-            DummyLogin = new DummyLoginConfig()
+            DummyLogin = new DummyLoginConfig(),
+            Fix = new FixConfig()
         };
 
         public void Initialize(string yamlFilePath)
@@ -21,7 +22,8 @@ namespace SinmaiAssist
             Config config = new Config
             {
                 ScoreTransfer = new ScoreTransferConfig(),
-                DummyLogin = new DummyLoginConfig()
+                DummyLogin = new DummyLoginConfig(),
+                Fix = new FixConfig()
             };
 
             string section = null;
@@ -61,6 +63,9 @@ namespace SinmaiAssist
                     case "dummyLogin":
                         ApplyDummyLogin(config.DummyLogin, key, value);
                         break;
+                    case "fix":
+                        ApplyFix(config.Fix, key, value);
+                        break;
                 }
             }
 
@@ -69,6 +74,7 @@ namespace SinmaiAssist
 
         public ScoreTransferConfig ScoreTransfer => _config.ScoreTransfer;
         public DummyLoginConfig DummyLogin => _config.DummyLogin;
+        public FixConfig Fix => _config.Fix;
 
         private static void ApplyScoreTransfer(ScoreTransferConfig cfg, string key, string value)
         {
@@ -95,6 +101,21 @@ namespace SinmaiAssist
             }
         }
 
+        private static void ApplyFix(FixConfig cfg, string key, string value)
+        {
+            switch (key)
+            {
+                case "enable": cfg.Enable = ParseBool(value); break;
+                case "disableEnvironmentCheck": cfg.DisableEnvironmentCheck = ParseBool(value); break;
+                case "disableEncryption": cfg.DisableEncryption = ParseBool(value); break;
+                case "disableReboot": cfg.DisableReboot = ParseBool(value); break;
+                case "fixCheckAuth": cfg.FixCheckAuth = ParseBool(value); break;
+                case "skipCakeHashCheck": cfg.SkipCakeHashCheck = ParseBool(value); break;
+                case "skipSpecialNumCheck": cfg.SkipSpecialNumCheck = ParseBool(value); break;
+                case "skipVersionCheck": cfg.SkipVersionCheck = ParseBool(value); break;
+            }
+        }
+
         private static bool ParseBool(string value)
         {
             return value.Equals("true", StringComparison.OrdinalIgnoreCase)
@@ -118,6 +139,7 @@ namespace SinmaiAssist
     {
         public ScoreTransferConfig ScoreTransfer { get; set; }
         public DummyLoginConfig DummyLogin { get; set; }
+        public FixConfig Fix { get; set; }
     }
 
     public class ScoreTransferConfig
@@ -137,5 +159,17 @@ namespace SinmaiAssist
     {
         public bool Enable { get; set; }
         public int DefaultUserId { get; set; } = 1;
+    }
+
+    public class FixConfig
+    {
+        public bool Enable { get; set; } = true;
+        public bool DisableEnvironmentCheck { get; set; } = true;
+        public bool DisableEncryption { get; set; } = false;
+        public bool DisableReboot { get; set; } = false;
+        public bool FixCheckAuth { get; set; } = false;
+        public bool SkipCakeHashCheck { get; set; } = false;
+        public bool SkipSpecialNumCheck { get; set; } = false;
+        public bool SkipVersionCheck { get; set; } = false;
     }
 }
