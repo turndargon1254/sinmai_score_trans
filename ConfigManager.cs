@@ -79,6 +79,7 @@ namespace SinmaiAssist
                 case "batchSize": cfg.BatchSize = ParseInt(value, cfg.BatchSize); break;
                 case "enterTimeoutSeconds": cfg.EnterTimeoutSeconds = ParseFloat(value, cfg.EnterTimeoutSeconds); break;
                 case "trackTimeoutSeconds": cfg.TrackTimeoutSeconds = ParseFloat(value, cfg.TrackTimeoutSeconds); break;
+                case "fillRemainingTracks": cfg.FillRemainingTracks = ParseBool(value); break;
             }
         }
 
@@ -123,6 +124,7 @@ namespace SinmaiAssist
         public int BatchSize { get; set; } = 4;
         public float EnterTimeoutSeconds { get; set; } = 120f;
         public float TrackTimeoutSeconds { get; set; } = 120f;
+        public bool FillRemainingTracks { get; set; } = true;
     }
 
     public class DummyLoginConfig

@@ -4,6 +4,7 @@
   batchSize: 4
   enterTimeoutSeconds: 120
   trackTimeoutSeconds: 120
+  fillRemainingTracks: true
 dummyLogin:
   enable: true
   defaultUserId: 1

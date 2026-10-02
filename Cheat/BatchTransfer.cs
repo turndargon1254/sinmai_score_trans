@@ -181,8 +181,16 @@ namespace SinmaiAssist.Cheat
                 State = $"Batch {CurrentBatch}/{TotalBatches} 完成";
             }
 
+            // 所有计划曲目处理完后：若本局尚未结束（游戏又回到选曲界面，说明还剩 Track），
+            // 就用最后一首重复传分，直到游戏进入结算/本局结束（登出）。
+            if (!_stopRequested && items.Count > 0 && SinmaiAssist.config.ScoreTransfer.FillRemainingTracks)
+            {
+                yield return FillRemainingTracks(items[items.Count - 1], enterTimeout, trackTimeout);
+            }
+
             State = "Completed";
             Message = _stopRequested ? "已停止" : "全部完成";
+            ResultAdvancer.Enabled = false;
             Running = false;
             MelonLogger.Msg($"[ScoreTransfer] 批次任务结束：成功 {CompletedCount}，失败 {FailedCount}");
         }
@@ -249,6 +257,46 @@ namespace SinmaiAssist.Cheat
                 yield return null;
             }
             _lastWaitOk = GameState.IsMusicSelect && MusicSelect.IsReady;
+        }
+
+        private static IEnumerator FillRemainingTracks(TransferItem last, float enterTimeout, float trackTimeout)
+        {
+            int safety = 0;
+            while (safety < 10)
+            {
+                if (GameState.IsSessionEnding)
+                {
+                    MelonLogger.Msg("[ScoreTransfer] 本局已结束（进入结算/登出），停止补曲");
+                    yield break;
+                }
+
+                State = "补足剩余 Track";
+                yield return EnsureMusicSelect(enterTimeout);
+                if (!_lastWaitOk)
+                {
+                    MelonLogger.Warning("[ScoreTransfer] 补曲：无法进入选曲界面");
+                    yield break;
+                }
+                if (GameState.IsSessionEnding)
+                {
+                    yield break;
+                }
+
+                TransferItem repeat = new TransferItem
+                {
+                    musicId = last.musicId,
+                    scoreType = last.scoreType,
+                    difficulty = last.difficulty,
+                    targetAchievement = last.targetAchievement,
+                    name = last.name,
+                    batchIndex = last.batchIndex
+                };
+                repeat.MarkRunning();
+                MelonLogger.Msg($"[ScoreTransfer] 补足剩余 Track：重复最后一首 {repeat.musicId} (难度 {repeat.difficulty})");
+                yield return RunSingle(repeat, enterTimeout, trackTimeout);
+                safety++;
+            }
+            MelonLogger.Warning("[ScoreTransfer] 补曲达到上限，停止");
         }
 
         private static IEnumerator WaitAfterTrack(float timeout)
