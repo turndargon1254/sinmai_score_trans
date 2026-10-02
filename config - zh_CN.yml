@@ -1,0 +1,10 @@
+﻿scoreTransfer: # 分数转移
+  enable: true # 是否启用
+  port: 8082 # 网页服务端口
+  batchSize: 4 # 每批转移曲目数 (舞萌一次游玩上限)
+  enterTimeoutSeconds: 120 # 等待进入选歌界面的超时时间(秒)
+  trackTimeoutSeconds: 120 # 等待单曲完成的超时时间(秒)
+  autoContinue: true # 自动续关(每批后直接继续下一批，不结束本局)
+dummyLogin: # 自动登录(刷卡)
+  enable: true # 是否启用
+  defaultUserId: 1 # 默认用户ID

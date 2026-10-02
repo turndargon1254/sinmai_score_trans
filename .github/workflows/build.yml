@@ -1,0 +1,71 @@
+name: Build Sinmai-ScoreTransfer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Prepare dependencies
+        shell: pwsh
+        run: |
+          choco install 7zip.install -y
+          New-Item -ItemType Directory -Force -Path cache | Out-Null
+
+          # MelonLoader (for MelonLoader.dll etc.)
+          Invoke-WebRequest -Uri https://github.com/LavaGang/MelonLoader/releases/download/v0.6.5/MelonLoader.x64.zip -OutFile "$(Get-Location)\cache\MelonLoader.x64.zip"
+          7z x "$(Get-Location)\cache\MelonLoader.x64.zip" -o"$(Get-Location)\Out"
+
+          # Game / mod build dependencies (Assembly-CSharp.dll, 0Harmony.dll, ...)
+          # Provided through the OUTPUT_URL repository secret.
+          Invoke-WebRequest -Uri "${{ secrets.OUTPUT_URL }}" -OutFile "$(Get-Location)\cache\Output.7z"
+          7z x "$(Get-Location)\cache\Output.7z" -o"$(Get-Location)\Output"
+
+          $commitHash = "NOT SET"
+          if (git --version 2>$null) { $commitHash = git rev-parse --short HEAD }
+          $timestamp = Get-Date -Format 'o'
+
+          @"
+          namespace SinmaiAssist {
+              public static partial class BuildInfo {
+                  public const string CommitHash = "$commitHash";
+                  public const string BuildDate = "$timestamp";
+              }
+          }
+          "@ | Out-File -FilePath ".\BuildInfo.cs" -Encoding ascii
+
+      - name: Build
+        run: dotnet build Sinmai-ScoreTransfer.sln -c Release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ".\Out\Mods\" | Out-Null
+          New-Item -ItemType Directory -Force -Path ".\Out\Sinmai-ScoreTransfer\" | Out-Null
+          Copy-Item ".\Output\Sinmai-ScoreTransfer.dll" ".\Out\Mods\Sinmai-ScoreTransfer.dll" -Force
+          Copy-Item ".\config - zh_CN.yml" ".\Out\Sinmai-ScoreTransfer\config.yml" -Force
+          Compress-Archive -Path "$(Get-Location)\Out\*" -DestinationPath "$(Get-Location)\Sinmai-ScoreTransfer.zip" -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sinmai-ScoreTransfer
+          path: Sinmai-ScoreTransfer.zip
