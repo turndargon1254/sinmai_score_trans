@@ -52,7 +52,7 @@ namespace SinmaiAssist
             }
             else
             {
-                MelonLogger.Warning($"未找到配置文件 \"{Path.GetFullPath(yamlFilePath)}\"，使用默认配置 (enable=true, port=8082)。");
+                MelonLogger.Warning($"未找到配置文件 \"{System.IO.Path.GetFullPath(yamlFilePath)}\"，使用默认配置 (enable=true, port=8082)。");
             }
 
             try
