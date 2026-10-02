@@ -43,11 +43,23 @@ jobs:
           Invoke-WebRequest -Uri $outputUrl -OutFile "$(Get-Location)\cache\Output.7z"
           7z x "$(Get-Location)\cache\Output.7z" -o"$(Get-Location)\Output" -y
 
-          # The project references dependencies through Libs\. Populate Libs from whatever
-          # the archives contain so both Output\ and Libs\ hint paths resolve.
+          # The project references dependencies through Libs\. Flatten the needed DLLs
+          # (game + UnityEngine + System at the archive root; 0Harmony/MelonLoader from net35) into Libs.
           New-Item -ItemType Directory -Force -Path Libs | Out-Null
-          Get-ChildItem -Path Output, "$(Get-Location)\cache\MelonLoader" -Recurse -Filter *.dll -ErrorAction SilentlyContinue |
-            Copy-Item -Destination Libs -Force
+
+          $cand = Get-ChildItem -Path Output -Recurse -Filter Assembly-CSharp.dll -ErrorAction SilentlyContinue | Select-Object -First 1
+          $base = if ($cand) { $cand.Directory.FullName } else { (Resolve-Path Output).Path }
+
+          if (Test-Path "$base\net35") {
+            Get-ChildItem "$base\net35" -Filter *.dll -File | Copy-Item -Destination Libs -Force
+          }
+          Get-ChildItem "$base" -Filter *.dll -File | Copy-Item -Destination Libs -Force
+
+          # Fallback: take 0Harmony/MelonLoader (net35) from the MelonLoader package if missing.
+          $mlNet35 = Get-ChildItem -Path "cache\MelonLoader" -Recurse -Directory -Filter net35 -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($mlNet35) {
+            Get-ChildItem $mlNet35.FullName -Filter *.dll -File | Copy-Item -Destination Libs -Force
+          }
 
           $commitHash = "NOT SET"
           if (git --version 2>$null) { $commitHash = git rev-parse --short HEAD }
