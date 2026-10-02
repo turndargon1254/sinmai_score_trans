@@ -76,6 +76,42 @@ namespace SinmaiAssist
         public DummyLoginConfig DummyLogin => _config.DummyLogin;
         public FixConfig Fix => _config.Fix;
 
+        /// <summary>当配置文件不存在时，生成一份带注释的默认配置。</summary>
+        public static void WriteDefault(string path)
+        {
+            string dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+            File.WriteAllText(path, DefaultYaml, new System.Text.UTF8Encoding(false));
+        }
+
+        private const string DefaultYaml =
+            "# Sinmai-ScoreTransfer 配置\r\n" +
+            "scoreTransfer: # 分数转移\r\n" +
+            "  enable: true # 是否启用\r\n" +
+            "  port: 8082 # 网页服务端口\r\n" +
+            "  batchSize: 4 # 每个 Session 最多转移曲目数\r\n" +
+            "  enterTimeoutSeconds: 120 # 等待进入选歌界面的超时(秒)\r\n" +
+            "  trackTimeoutSeconds: 120 # 等待单曲完成的超时(秒)\r\n" +
+            "  fillRemainingTracks: true # 最后一首后若本局还有剩余 Track，重复最后一首直到结算\r\n" +
+            "  uploadTimeoutSeconds: 60 # 等待成绩提交(UpsertUserAll)成功的超时(秒)\r\n" +
+            "  logoutTimeoutSeconds: 60 # 等待登出(UserLogout)成功的超时(秒)\r\n" +
+            "  loginTimeoutSeconds: 120 # 等待回到可登录界面的超时(秒)\r\n" +
+            "dummyLogin: # 自动登录(刷卡)\r\n" +
+            "  enable: true # 是否启用\r\n" +
+            "  defaultUserId: 1 # 默认用户ID\r\n" +
+            "fix: # 启动/联网相关修复\r\n" +
+            "  enable: true # 是否启用\r\n" +
+            "  disableEnvironmentCheck: true # 禁用运行环境检查(WarningProcess)\r\n" +
+            "  disableEncryption: false # 禁用加密(官方服必须 false)\r\n" +
+            "  disableReboot: false # 禁用维护/自动重启\r\n" +
+            "  fixCheckAuth: false # 修复 CheckAuth(官方服必须 false)\r\n" +
+            "  skipCakeHashCheck: false # 跳过 Cake.dll Hash 检查(官方服必须 false)\r\n" +
+            "  skipSpecialNumCheck: false # 跳过特殊数字检查(官方服必须 false)\r\n" +
+            "  skipVersionCheck: false # 登录时跳过版本检查(官方服必须 false)\r\n";
+
         private static void ApplyScoreTransfer(ScoreTransferConfig cfg, string key, string value)
         {
             switch (key)

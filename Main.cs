@@ -39,6 +39,19 @@ namespace SinmaiAssist
             config = new ConfigManager();
 
             string yamlFilePath = $"{BuildInfo.Name}/config.yml";
+            if (!File.Exists(yamlFilePath))
+            {
+                try
+                {
+                    ConfigManager.WriteDefault(yamlFilePath);
+                    MelonLogger.Msg($"未找到配置，已生成默认配置: {System.IO.Path.GetFullPath(yamlFilePath)}");
+                }
+                catch (Exception e)
+                {
+                    MelonLogger.Warning($"生成默认配置失败，将使用内存默认值: {e.Message}");
+                }
+            }
+
             if (File.Exists(yamlFilePath))
             {
                 try
@@ -50,10 +63,6 @@ namespace SinmaiAssist
                 {
                     MelonLogger.Error($"配置解析失败，使用默认配置: {e}");
                 }
-            }
-            else
-            {
-                MelonLogger.Warning($"未找到配置文件 \"{System.IO.Path.GetFullPath(yamlFilePath)}\"，使用默认配置 (enable=true, port=8082)。");
             }
 
             try
