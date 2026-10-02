@@ -129,7 +129,14 @@ namespace SinmaiAssist
             Patch(typeof(GameState));
             Patch(typeof(BatchTransfer));
 
-            ScoreTransferHttpServer.Init(config.ScoreTransfer.Port);
+            if (config.ScoreTransfer.WebEnable)
+            {
+                ScoreTransferHttpServer.Init(config.ScoreTransfer.Port);
+            }
+            else
+            {
+                MelonLogger.Msg("网页服务已禁用 (scoreTransfer.webEnable=false)");
+            }
 
             if (isPatchFailed)
             {

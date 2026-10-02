@@ -92,6 +92,7 @@ namespace SinmaiAssist
             "scoreTransfer: # 分数转移\r\n" +
             "  enable: true # 是否启用\r\n" +
             "  port: 8082 # 网页服务端口\r\n" +
+            "  webEnable: true # 是否启动网页服务(若启动后游戏断网，请设为 false，可能是防火墙拦截)\r\n" +
             "  batchSize: 4 # 每个 Session 最多转移曲目数\r\n" +
             "  enterTimeoutSeconds: 120 # 等待进入选歌界面的超时(秒)\r\n" +
             "  trackTimeoutSeconds: 120 # 等待单曲完成的超时(秒)\r\n" +
@@ -102,8 +103,8 @@ namespace SinmaiAssist
             "dummyLogin: # 自动登录(刷卡)\r\n" +
             "  enable: true # 是否启用\r\n" +
             "  defaultUserId: 1 # 默认用户ID\r\n" +
-            "fix: # 启动/联网相关修复\r\n" +
-            "  enable: true # 是否启用\r\n" +
+            "fix: # 启动/联网相关修复（默认关闭；仅在你不用 AquaMai 时才需要开）\r\n" +
+            "  enable: false # 是否启用\r\n" +
             "  disableEnvironmentCheck: true # 禁用运行环境检查(WarningProcess)\r\n" +
             "  disableEncryption: false # 禁用加密(官方服必须 false)\r\n" +
             "  disableReboot: false # 禁用维护/自动重启\r\n" +
@@ -118,6 +119,7 @@ namespace SinmaiAssist
             {
                 case "enable": cfg.Enable = ParseBool(value); break;
                 case "port": cfg.Port = ParseInt(value, cfg.Port); break;
+                case "webEnable": cfg.WebEnable = ParseBool(value); break;
                 case "batchSize": cfg.BatchSize = ParseInt(value, cfg.BatchSize); break;
                 case "enterTimeoutSeconds": cfg.EnterTimeoutSeconds = ParseFloat(value, cfg.EnterTimeoutSeconds); break;
                 case "trackTimeoutSeconds": cfg.TrackTimeoutSeconds = ParseFloat(value, cfg.TrackTimeoutSeconds); break;
@@ -182,6 +184,7 @@ namespace SinmaiAssist
     {
         public bool Enable { get; set; }
         public int Port { get; set; } = 8082;
+        public bool WebEnable { get; set; } = true;
         public int BatchSize { get; set; } = 4;
         public float EnterTimeoutSeconds { get; set; } = 120f;
         public float TrackTimeoutSeconds { get; set; } = 120f;
@@ -199,7 +202,7 @@ namespace SinmaiAssist
 
     public class FixConfig
     {
-        public bool Enable { get; set; } = true;
+        public bool Enable { get; set; } = false;
         public bool DisableEnvironmentCheck { get; set; } = true;
         public bool DisableEncryption { get; set; } = false;
         public bool DisableReboot { get; set; } = false;

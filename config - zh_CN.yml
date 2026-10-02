@@ -1,6 +1,7 @@
 ﻿scoreTransfer: # 分数转移
   enable: true # 是否启用
   port: 8082 # 网页服务端口
+  webEnable: true # 是否启动网页服务（启动后若游戏断网请设 false，可能是防火墙拦截）
   batchSize: 4 # 每批转移曲目数 (舞萌一次游玩上限)
   enterTimeoutSeconds: 120 # 等待进入选歌界面的超时时间(秒)
   trackTimeoutSeconds: 120 # 等待单曲完成的超时时间(秒)
@@ -11,8 +12,8 @@
 dummyLogin: # 自动登录(刷卡)
   enable: true # 是否启用
   defaultUserId: 1 # 默认用户ID
-fix: # 启动/联网相关修复（1.56 可能必需，可替代 AquaMai 的对应功能）
-  enable: true # 是否启用
+fix: # 启动/联网相关修复（默认关闭；仅在你不用 AquaMai 时才需要开）
+  enable: false # 是否启用
   disableEnvironmentCheck: true # 禁用运行环境检查(WarningProcess)
   disableEncryption: false # 禁用加密(仅私服需要)
   disableReboot: false # 禁用维护/自动重启
