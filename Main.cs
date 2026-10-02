@@ -112,6 +112,27 @@ namespace SinmaiAssist
                 MelonLogger.Warning("部分 Patch 失败，请确认使用与 Mod 匹配的游戏版本。");
             }
             MelonLogger.Msg("Sinmai-ScoreTransfer 加载完成");
+
+            try
+            {
+                foreach (MelonMod mod in MelonHandler.Mods)
+                {
+                    MelonLogger.Msg($"[ScoreTransfer] 已加载 Mod: {mod.Info.Name} {mod.Info.Version}");
+                }
+                MelonLogger.Warning("[ScoreTransfer] 若同时安装 AquaMai 且其 Shim 报 MissingMethodException，请更新或禁用它（与 1.56 不兼容）。");
+            }
+            catch (Exception e)
+            {
+                MelonLogger.Warning($"[ScoreTransfer] 枚举 Mod 失败: {e.Message}");
+            }
+        }
+
+        public override void OnUpdate()
+        {
+            if (config != null && config.ScoreTransfer != null && config.ScoreTransfer.Enable)
+            {
+                SongDatabase.EnsureBuilt();
+            }
         }
 
         public override void OnGUI()

@@ -79,8 +79,9 @@ namespace SinmaiAssist.Utils
 
                     string method;
                     string path;
+                    string query;
                     string body;
-                    if (!ReadRequest(stream, out method, out path, out body))
+                    if (!ReadRequest(stream, out method, out path, out query, out body))
                     {
                         Write(stream, "400 Bad Request", "text/plain; charset=utf-8", "bad request");
                         return;
@@ -97,6 +98,10 @@ namespace SinmaiAssist.Utils
                     else if (method == "GET" && path == "/api/status")
                     {
                         Write(stream, "200 OK", "application/json; charset=utf-8", BuildStatusJson());
+                    }
+                    else if (method == "GET" && path == "/api/search")
+                    {
+                        Write(stream, "200 OK", "application/json; charset=utf-8", HandleSearch(query));
                     }
                     else if (method == "POST" && path == "/api/transfer")
                     {
@@ -348,7 +353,45 @@ namespace SinmaiAssist.Utils
 
         private static string BuildAllMusicJson()
         {
-            var list = ScoreTransfer.SongList;
+            return BuildSongsJson(SongDatabase.Songs);
+        }
+
+        private static string HandleSearch(string query)
+        {
+            string q = GetQueryParam(query, "q");
+            int limit = 0;
+            int.TryParse(GetQueryParam(query, "limit"), out limit);
+            return BuildSongsJson(SongDatabase.Search(q, limit));
+        }
+
+        private static string GetQueryParam(string query, string key)
+        {
+            if (string.IsNullOrEmpty(query))
+            {
+                return "";
+            }
+            foreach (string pair in query.Split('&'))
+            {
+                int eq = pair.IndexOf('=');
+                string k = eq >= 0 ? pair.Substring(0, eq) : pair;
+                if (k.Equals(key, StringComparison.OrdinalIgnoreCase))
+                {
+                    string v = eq >= 0 ? pair.Substring(eq + 1) : "";
+                    try
+                    {
+                        return Uri.UnescapeDataString(v.Replace("+", " "));
+                    }
+                    catch
+                    {
+                        return v;
+                    }
+                }
+            }
+            return "";
+        }
+
+        private static string BuildSongsJson(List<TransferSongInfo> list)
+        {
             StringBuilder sb = new StringBuilder();
             sb.Append('[');
             bool first = true;
@@ -383,10 +426,11 @@ namespace SinmaiAssist.Utils
             return sb.ToString();
         }
 
-        private static bool ReadRequest(NetworkStream stream, out string method, out string path, out string body)
+        private static bool ReadRequest(NetworkStream stream, out string method, out string path, out string query, out string body)
         {
             method = "GET";
             path = "/";
+            query = "";
             body = "";
 
             byte[] buffer = new byte[8192];
@@ -421,10 +465,11 @@ namespace SinmaiAssist.Utils
                 path = firstLine[1];
             }
 
-            int query = path.IndexOf('?');
-            if (query >= 0)
+            int queryIndex = path.IndexOf('?');
+            if (queryIndex >= 0)
             {
-                path = path.Substring(0, query);
+                query = path.Substring(queryIndex + 1);
+                path = path.Substring(0, queryIndex);
             }
 
             int contentLength = 0;
@@ -733,8 +778,7 @@ function esc(s){ return (s||'').replace(/[&<>""]/g, c => ({'&':'&amp;','<':'&lt;
 function diffName(d){ return ['Basic','Advanced','Expert','Master','Re:Master'][d]; }
 
 function render(){
-  const q = searchEl.value.trim().toLowerCase();
-  const filtered = songs.filter(s => !q || (s.name||'').toLowerCase().includes(q) || (s.artist||'').toLowerCase().includes(q) || String(s.id).includes(q) || (s.charts||[]).some(c => (c.designer||'').toLowerCase().includes(q)));
+  const filtered = songs;
   listEl.innerHTML = filtered.slice(0, 300).map(s => {
     const sel = selected && selected.id === s.id ? ' sel' : '';
     const dx = s.scoreType === 1 ? '<span class=""tag"">DX</span>' : '<span class=""tag"">SD</span>';
@@ -849,12 +893,18 @@ document.getElementById('loginUserBtn').onclick = () => {
     .catch(e => { statusEl.textContent = '请求失败: ' + e; });
 };
 
-searchEl.oninput = render;
-fetch('/api/allMusic').then(r=>r.json()).then(data => {
-  songs = data || [];
-  statusEl.textContent = '共 ' + songs.length + ' 首歌曲';
-  render();
-}).catch(()=>{ statusEl.textContent = '加载歌曲列表失败，请确认已在选歌界面打开页面'; });
+let searchTimer = null;
+function doSearch(){
+  const q = searchEl.value.trim();
+  fetch('/api/search?q=' + encodeURIComponent(q) + '&limit=300')
+    .then(r => r.json()).then(data => {
+      songs = data || [];
+      render();
+      statusEl.textContent = '搜索结果: ' + songs.length + ' 首';
+    }).catch(e => { statusEl.textContent = '搜索失败: ' + e; });
+}
+searchEl.oninput = () => { if(searchTimer) clearTimeout(searchTimer); searchTimer = setTimeout(doSearch, 200); };
+doSearch();
 
 setInterval(refreshStatus, 2000);
 setInterval(refreshBatch, 1500);

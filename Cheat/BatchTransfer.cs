@@ -34,6 +34,18 @@ namespace SinmaiAssist.Cheat
         private static volatile bool _stopRequested;
         private static List<TransferItem> _pendingItems;
         private static bool _lastWaitOk;
+        private static float _lastLogTime;
+
+        private static void LogSnapshot(string tag)
+        {
+            float now = Time.realtimeSinceStartup;
+            if (now - _lastLogTime < 1f)
+            {
+                return;
+            }
+            _lastLogTime = now;
+            MelonLogger.Msg($"[ScoreTransfer] {tag} · {GameState.Snapshot()}");
+        }
 
         public static bool RequestStart(List<TransferItem> items, out string error)
         {
@@ -205,6 +217,7 @@ namespace SinmaiAssist.Cheat
                     item.MarkDone();
                     break;
                 }
+                LogSnapshot("等待曲目完成");
                 t += Time.deltaTime;
                 yield return null;
             }
@@ -231,6 +244,7 @@ namespace SinmaiAssist.Cheat
                     yield break;
                 }
                 GameState.TryAutoAdvance();
+                LogSnapshot("等待选曲界面");
                 t += Time.deltaTime;
                 yield return null;
             }
@@ -247,6 +261,7 @@ namespace SinmaiAssist.Cheat
                     _lastWaitOk = true;
                     yield break;
                 }
+                LogSnapshot("等待 Track 结束");
                 t += Time.deltaTime;
                 yield return null;
             }
@@ -270,7 +285,7 @@ namespace SinmaiAssist.Cheat
 
         private static string LookupName(int musicId)
         {
-            foreach (TransferSongInfo song in ScoreTransfer.SongList)
+            foreach (TransferSongInfo song in SongDatabase.Songs)
             {
                 if (song.id == musicId)
                 {

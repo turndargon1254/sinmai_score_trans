@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
+using MAI2.Util;
 using Main;
 using Manager;
 using MelonLoader;
@@ -23,6 +24,17 @@ namespace SinmaiAssist.Utils
 
         private static FieldInfo _processListField;
         private static readonly Dictionary<Type, MemberInfo> _processMemberCache = new Dictionary<Type, MemberInfo>();
+        private static int _advanceLockFrames;
+
+        /// <summary>当前游戏状态快照，便于诊断。</summary>
+        public static string Snapshot()
+        {
+            int track = 0;
+            int scoreCount = 0;
+            try { track = (int)GameManager.MusicTrackNumber; } catch { }
+            try { scoreCount = Singleton<GamePlayManager>.Instance.GetScoreListCount(); } catch { }
+            return $"MusicSelect={IsMusicSelect} TrackNo={track} ScoreListCount={scoreCount} Processes=[{string.Join(",", GetProcessNames())}]";
+        }
 
         // 登录完成后需要自动跳过的选择类流程
         private static readonly HashSet<string> PostLoginProcesses = new HashSet<string>
@@ -125,6 +137,12 @@ namespace SinmaiAssist.Utils
         /// </summary>
         public static bool TryAutoAdvance()
         {
+            if (_advanceLockFrames > 0)
+            {
+                _advanceLockFrames--;
+                return false;
+            }
+
             ProcessManager manager = Container?.processManager;
             if (manager == null)
             {
@@ -171,7 +189,8 @@ namespace SinmaiAssist.Utils
                     MelonLogger.Warning($"[ScoreTransfer] CreditSub message failed: {e.Message}");
                 }
                 manager.AddProcess(new FadeProcess(Container, processToRelease, new MusicSelectProcess(Container)));
-                MelonLogger.Msg("[ScoreTransfer] 自动推进到选曲界面");
+                _advanceLockFrames = 120;
+                MelonLogger.Msg($"[ScoreTransfer] 自动推进到选曲界面 (from {processToRelease})");
                 return true;
             }
             catch (Exception e)

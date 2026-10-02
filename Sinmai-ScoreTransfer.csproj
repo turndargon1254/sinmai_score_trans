@@ -87,6 +87,7 @@
     <Compile Include="Utils\GameState.cs" />
     <Compile Include="Utils\Keyboard.cs" />
     <Compile Include="Utils\ScoreTransferHttpServer.cs" />
+    <Compile Include="Utils\SongDatabase.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

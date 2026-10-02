@@ -254,6 +254,17 @@ namespace SinmaiAssist.Cheat
                 NoteScore.EScoreType scoreType = GamePlayManager.NoteType2ScoreType(item4.type.getEnum());
                 NoteJudge.ETiming timing = noteArray[num4];
                 NoteJudge.ETiming timing2 = noteArray[num5];
+                // 按需求：所有 TAP 必须使用普通 Perfect，禁止 Critical Perfect。
+                // Achievement 计分表中 Critical 与 FastPerfect/LatePerfect 同值（Tap=500），
+                // 因此替换不影响达成率预算，只会降低 DX Score。
+                if (timing == NoteJudge.ETiming.Critical)
+                {
+                    timing = NoteJudge.ETiming.FastPerfect;
+                }
+                if (timing2 == NoteJudge.ETiming.Critical)
+                {
+                    timing2 = NoteJudge.ETiming.FastPerfect;
+                }
                 if (0m < (decimal)num6 && 0m <= (decimal)(num2 - NoteScore.GetJudgeScore(timing2, scoreType)))
                 {
                     num6 -= NoteScore.GetJudgeScore(timing2, scoreType) - NoteScore.GetJudgeScore(timing, scoreType);

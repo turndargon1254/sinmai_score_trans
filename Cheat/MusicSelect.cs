@@ -29,7 +29,29 @@ namespace SinmaiAssist.Cheat
         private static MusicSelectProcess.SubSequence[] _currentPlayerSubSequence;
         private static MusicSelectProcess.SubSequence[] _beforePlayerSubSequence;
 
-        public static bool IsReady => CombineMusicDataList != null && Process != null;
+        public static bool IsReady
+        {
+            get
+            {
+                if (Process == null)
+                {
+                    return false;
+                }
+                return CombineMusicDataList != null || Process.CombineMusicDataList != null;
+            }
+        }
+
+        private static List<ReadOnlyCollection<MusicSelectProcess.CombineMusicSelectData>> Data
+        {
+            get
+            {
+                if (CombineMusicDataList != null)
+                {
+                    return CombineMusicDataList;
+                }
+                return Process?.CombineMusicDataList;
+            }
+        }
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(MusicSelectProcess), "OnStart")]
@@ -40,7 +62,7 @@ namespace SinmaiAssist.Cheat
             MusicSelectProcess.SubSequence[] ____currentPlayerSubSequence,
             MusicSelectProcess.SubSequence[] ____beforePlayerSubSequence)
         {
-            CombineMusicDataList = ____combineMusicDataList;
+            CombineMusicDataList = ____combineMusicDataList ?? __instance.CombineMusicDataList;
             Process = __instance;
             _subSequenceArray = ____subSequenceArray;
             _currentPlayerSubSequence = ____currentPlayerSubSequence;
@@ -73,14 +95,15 @@ namespace SinmaiAssist.Cheat
         /// </summary>
         public static string SelectMusic(int id)
         {
-            if (CombineMusicDataList == null)
+            List<ReadOnlyCollection<MusicSelectProcess.CombineMusicSelectData>> list = Data;
+            if (list == null)
             {
                 return "当前状态不能选择歌曲";
             }
 
-            for (int i = 0; i < CombineMusicDataList.Count; i++)
+            for (int i = 0; i < list.Count; i++)
             {
-                ReadOnlyCollection<MusicSelectProcess.CombineMusicSelectData> category = CombineMusicDataList[i];
+                ReadOnlyCollection<MusicSelectProcess.CombineMusicSelectData> category = list[i];
                 MusicSelectProcess.CombineMusicSelectData data = category.FirstOrDefault(it => it.msDetailData.musicId == id);
                 if (data == null)
                 {
@@ -89,7 +112,7 @@ namespace SinmaiAssist.Cheat
 
                 if (data != null)
                 {
-                    int index = CombineMusicDataList[i].IndexOf(data);
+                    int index = list[i].IndexOf(data);
                     Process.CurrentCategorySelect = i;
                     Process.CurrentMusicSelect = index;
                     Process.ScoreType = (MAI2System.ConstParameter.ScoreKind)(id < 10000 ? 0 : 1);
