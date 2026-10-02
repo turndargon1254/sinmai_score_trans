@@ -38,21 +38,21 @@ namespace SinmaiAssist
             config = new ConfigManager();
 
             string yamlFilePath = $"{BuildInfo.Name}/config.yml";
-            if (!File.Exists(yamlFilePath))
+            if (File.Exists(yamlFilePath))
             {
-                MelonLogger.Error($"Path: \"{yamlFilePath}\" Not Found.");
-                return;
+                try
+                {
+                    config.Initialize(yamlFilePath);
+                    MelonLogger.Msg("配置加载完成");
+                }
+                catch (Exception e)
+                {
+                    MelonLogger.Error($"配置解析失败，使用默认配置: {e}");
+                }
             }
-
-            try
+            else
             {
-                config.Initialize(yamlFilePath);
-                MelonLogger.Msg("配置加载完成");
-            }
-            catch (Exception e)
-            {
-                MelonLogger.Error($"配置初始化失败: \n{e}");
-                return;
+                MelonLogger.Warning($"未找到配置文件 \"{Path.GetFullPath(yamlFilePath)}\"，使用默认配置 (enable=true, port=8082)。");
             }
 
             try

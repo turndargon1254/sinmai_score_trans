@@ -10,7 +10,11 @@ namespace SinmaiAssist
     /// </summary>
     public class ConfigManager
     {
-        private Config _config = new Config();
+        private Config _config = new Config
+        {
+            ScoreTransfer = new ScoreTransferConfig(),
+            DummyLogin = new DummyLoginConfig()
+        };
 
         public void Initialize(string yamlFilePath)
         {
