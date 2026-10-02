@@ -76,6 +76,7 @@
     <Compile Include="Cheat\BatchTransfer.cs" />
     <Compile Include="Cheat\DummyLogin.cs" />
     <Compile Include="Cheat\MusicSelect.cs" />
+    <Compile Include="Cheat\ResultAdvancer.cs" />
     <Compile Include="Cheat\ScoreTransfer.cs" />
     <Compile Include="ConfigManager.cs" />
     <Compile Include="GUI\ScoreTransferPanel.cs" />

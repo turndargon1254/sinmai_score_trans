@@ -123,6 +123,7 @@ namespace SinmaiAssist.Cheat
             try
             {
                 State = "Selecting";
+                ResultAdvancer.Enabled = true;
                 if (!MusicSelect.IsReady)
                 {
                     Fail("当前不在选歌界面，无法开始转移");
