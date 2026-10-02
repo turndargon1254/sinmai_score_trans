@@ -40,6 +40,10 @@ namespace SinmaiAssist.Utils
         public static void UpsertProc(PacketUpsertUserAll __instance, PacketState __result)
         {
             int state = (int)__result;
+            if (state != 2 && state != 5)
+            {
+                return; // 0=Ready 1=Process 3=RetryWait 4=Dialog 都只是进行中
+            }
             int status = (int)__instance.Status;
             bool ok = state == 2 && status == 0;
             BatchSignals.Upsert = ok ? 1 : -1;
@@ -52,6 +56,10 @@ namespace SinmaiAssist.Utils
         public static void LogoutProc(PacketUserLogout __instance, PacketState __result)
         {
             int state = (int)__result;
+            if (state != 2 && state != 5)
+            {
+                return;
+            }
             int status = (int)__instance.Status;
             bool ok = state == 2 && status == 0;
             BatchSignals.Logout = ok ? 1 : -1;

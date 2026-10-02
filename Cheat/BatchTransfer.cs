@@ -169,7 +169,8 @@ namespace SinmaiAssist.Cheat
 
                 if (_sessionEnded)
                 {
-                    yield return HandleSessionEnd(session, uploadTimeout, logoutTimeout, loginTimeout);
+                    bool isLast = i >= items.Count - 1;
+                    yield return HandleSessionEnd(session, isLast, uploadTimeout, logoutTimeout, loginTimeout);
                     sessionOpen = false;
                 }
             }
@@ -188,7 +189,7 @@ namespace SinmaiAssist.Cheat
                 }
                 if (_sessionEnded)
                 {
-                    yield return HandleSessionEnd(session, uploadTimeout, logoutTimeout, loginTimeout);
+                    yield return HandleSessionEnd(session, true, uploadTimeout, logoutTimeout, loginTimeout);
                     sessionOpen = false;
                 }
             }
@@ -247,7 +248,7 @@ namespace SinmaiAssist.Cheat
             }
         }
 
-        private static IEnumerator HandleSessionEnd(int session, float uploadTimeout, float logoutTimeout, float loginTimeout)
+        private static IEnumerator HandleSessionEnd(int session, bool isLast, float uploadTimeout, float logoutTimeout, float loginTimeout)
         {
             State = "WaitingSettlement";
             Message = "WaitingSettlement";
@@ -282,12 +283,19 @@ namespace SinmaiAssist.Cheat
             // 3. 确认客户端已回到可重新登录状态（Entry 界面）
             State = "LoggedOut";
             Message = "LoggedOut";
-            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Logged out，等待可登录界面");
-            yield return WaitEntry(loginTimeout);
+            if (isLast)
+            {
+                MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Logged out（最后一批，结算/登出确认完成）");
+            }
+            else
+            {
+                MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Logged out，等待可登录界面");
+                yield return WaitEntry(loginTimeout);
+            }
 
             BatchSignals.Reset();
-            State = "StartingNextBatch";
-            Message = "StartingNextBatch";
+            State = isLast ? "Finished" : "StartingNextBatch";
+            Message = State;
         }
 
         private static IEnumerator RunSingle(TransferItem item, float enterTimeout, float trackTimeout)
