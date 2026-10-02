@@ -13,6 +13,7 @@ using MelonLoader;
 using Process;
 using SinmaiAssist.Utils;
 using UnityEngine;
+using Type = System.Type;
 
 namespace SinmaiAssist.Cheat
 {

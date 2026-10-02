@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using SinmaiAssist.Cheat;
 using SinmaiAssist.Types;
 using SinmaiAssist.Utils;
@@ -18,11 +18,11 @@ namespace SinmaiAssist.GUI
         {
             if (_title == null)
             {
-                _title = new GUIStyle(GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold };
+                _title = new GUIStyle(UnityEngine.GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold };
                 _title.normal.textColor = Color.white;
-                _text = new GUIStyle(GUI.skin.label) { fontSize = 12, wordWrap = true };
+                _text = new GUIStyle(UnityEngine.GUI.skin.label) { fontSize = 12, wordWrap = true };
                 _text.normal.textColor = Color.white;
-                _error = new GUIStyle(GUI.skin.label) { fontSize = 12, wordWrap = true };
+                _error = new GUIStyle(UnityEngine.GUI.skin.label) { fontSize = 12, wordWrap = true };
                 _error.normal.textColor = new Color(1f, 0.45f, 0.45f);
             }
 
@@ -94,7 +94,7 @@ namespace SinmaiAssist.GUI
             }
             GUILayout.EndHorizontal();
 
-            GUI.DragWindow();
+            UnityEngine.GUI.DragWindow();
         }
     }
 }

@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using Main;
+using Manager;
 using MelonLoader;
 using Process;
+using Type = System.Type;
 
 namespace SinmaiAssist.Utils
 {

@@ -194,19 +194,6 @@ namespace SinmaiAssist.Cheat
 
             try
             {
-                var musicData = Singleton<DataManager>.Instance.GetMusic(musicId);
-                if (musicData != null)
-                {
-                    GameManager.IsLongMusic = Singleton<DataManager>.Instance.IsLong(musicData.longMusic);
-                }
-            }
-            catch (Exception e)
-            {
-                MelonLogger.Warning($"[ScoreTransfer] 读取乐曲信息失败: {e.Message}");
-            }
-
-            try
-            {
                 if (MusicSelect.Process != null)
                 {
                     for (int i = 0; i < MusicSelect.Process.CurrentDifficulty.Length; i++)

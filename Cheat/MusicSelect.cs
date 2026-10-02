@@ -12,6 +12,7 @@ using Monitor;
 using Process;
 using Process.SubSequence;
 using SinmaiAssist.Types;
+using Type = System.Type;
 
 namespace SinmaiAssist.Cheat
 {
@@ -91,7 +92,7 @@ namespace SinmaiAssist.Cheat
                     int index = CombineMusicDataList[i].IndexOf(data);
                     Process.CurrentCategorySelect = i;
                     Process.CurrentMusicSelect = index;
-                    Process.ScoreType = id < 10000 ? 0 : 1;
+                    Process.ScoreType = (MAI2System.ConstParameter.ScoreKind)(id < 10000 ? 0 : 1);
                     Process.ChangeBGM();
 
                     for (int j = 0; j < Process.MonitorArray.Length; j++)

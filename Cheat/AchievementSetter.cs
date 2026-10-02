@@ -6,6 +6,7 @@ using Monitor;
 using Process;
 using System;
 using System.Reflection;
+using Type = System.Type;
 
 namespace SinmaiAssist.Cheat
 {
