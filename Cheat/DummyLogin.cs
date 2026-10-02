@@ -7,20 +7,100 @@ using AMDaemon;
 using ChimeLib.NET;
 using HarmonyLib;
 using Mai2.Mai2Cue;
+using Main;
 using Manager;
+using MelonLoader;
 using Process;
 using SinmaiAssist.Utils;
 using UnityEngine;
 
 namespace SinmaiAssist.Cheat
 {
-    /// <summary>自动登录（刷卡）所需的共享状态与刷卡动作。</summary>
+    /// <summary>自动登录（刷卡）所需的共享状态、刷卡动作与网页侧登录入口。</summary>
     public static class DummyLoginState
     {
         public static string DummyLoginCode = "";
         public static string DummyUserId = "1";
         public static bool CodeLoginFlag = false;
         public static bool UserIdLoginFlag = false;
+
+        /// <summary>由 Main 设置：当前游戏是否为 SDGB（Chime 版）。</summary>
+        public static bool IsChime = false;
+
+        public static string LastMessage = "";
+
+        private static volatile bool _pending;
+        private static volatile int _pendingMode; // 0 = code, 1 = userId
+        private static volatile string _pendingValue;
+
+        /// <summary>由 HTTP 线程调用：用二维码内容（Aime/Chime Code）登录。</summary>
+        public static void RequestCodeLogin(string code)
+        {
+            _pendingValue = code;
+            _pendingMode = 0;
+            _pending = true;
+        }
+
+        /// <summary>由 HTTP 线程调用：用 UserID 登录。</summary>
+        public static void RequestUserIdLogin(string userId)
+        {
+            _pendingValue = userId;
+            _pendingMode = 1;
+            _pending = true;
+        }
+
+        /// <summary>在主线程每帧处理待处理的登录请求。</summary>
+        public static void ProcessPending()
+        {
+            if (!_pending)
+            {
+                return;
+            }
+            _pending = false;
+            string value = _pendingValue;
+            if (_pendingMode == 0)
+            {
+                LoginWithCode(value);
+            }
+            else
+            {
+                LoginWithUserId(value);
+            }
+        }
+
+        public static void LoginWithCode(string code)
+        {
+            if (string.IsNullOrEmpty(code))
+            {
+                LastMessage = "二维码内容为空";
+                return;
+            }
+            DummyLoginCode = code.Trim();
+            CodeLoginFlag = true;
+            if (!IsChime)
+            {
+                ReadCard(DummyLoginCode);
+            }
+            LastMessage = $"已提交二维码登录 ({DummyLoginCode.Length} 字符)";
+            MelonLogger.Msg($"[ScoreTransfer] {LastMessage}");
+        }
+
+        public static void LoginWithUserId(string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+            {
+                LastMessage = "UserID 为空";
+                return;
+            }
+            DummyUserId = userId.Trim();
+            UserIdLoginFlag = true;
+            if (!IsChime)
+            {
+                ReadCard("12312312312312312312", DummyLoginCode);
+            }
+            LastMessage = $"已提交 UserID 登录 ({DummyUserId})";
+            MelonLogger.Msg($"[ScoreTransfer] {LastMessage}");
+        }
 
         public static void ReadCard(string accesscode = null, string oldCode = null)
         {
@@ -44,6 +124,17 @@ namespace SinmaiAssist.Cheat
                 GameMessageManager.SendMessage(1, "<color=\"red\">Failed to read Aime!");
                 SoundManager.PlaySE(Cue.SE_ENTRY_AIME_ERROR, 1);
             }
+        }
+    }
+
+    /// <summary>在主线程驱动待处理的登录请求。</summary>
+    public class DummyLoginTicker
+    {
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(GameMainObject), "Update")]
+        public static void OnTick()
+        {
+            DummyLoginState.ProcessPending();
         }
     }
 

@@ -81,6 +81,7 @@ namespace SinmaiAssist
             // 自动登录
             if (config.DummyLogin != null && config.DummyLogin.Enable)
             {
+                DummyLoginState.IsChime = Flag1;
                 DummyLoginState.DummyUserId = config.DummyLogin.DefaultUserId.ToString();
                 if (Flag1)
                 {
@@ -94,6 +95,7 @@ namespace SinmaiAssist
                     }
                     Patch(typeof(DummyAimeLogin));
                 }
+                Patch(typeof(DummyLoginTicker));
             }
 
             // 分数转移核心

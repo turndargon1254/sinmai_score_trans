@@ -115,6 +115,10 @@ namespace SinmaiAssist.Utils
                         BatchTransfer.RequestStop();
                         Write(stream, "200 OK", "application/json; charset=utf-8", "{\"ok\":true}");
                     }
+                    else if (method == "POST" && path == "/api/login")
+                    {
+                        Write(stream, "200 OK", "application/json; charset=utf-8", HandleLogin(body));
+                    }
                     else
                     {
                         Write(stream, "404 Not Found", "text/plain; charset=utf-8", "not found");
@@ -160,6 +164,38 @@ namespace SinmaiAssist.Utils
                 return "{\"ok\":false,\"error\":\"" + JsonEscape(error) + "\"}";
             }
             return "{\"ok\":true,\"count\":" + items.Count + "}";
+        }
+
+        private static string HandleLogin(string body)
+        {
+            if (SinmaiAssist.config.DummyLogin == null || !SinmaiAssist.config.DummyLogin.Enable)
+            {
+                return "{\"ok\":false,\"error\":\"自动登录未启用 (dummyLogin.enable)\"}";
+            }
+
+            string mode = GetJsonString(body, "mode");
+            string code = GetJsonString(body, "code");
+            string userId = GetJsonString(body, "userId");
+
+            bool codeMode = !string.IsNullOrEmpty(code) || ModeEquals(mode, "code");
+            bool userMode = !string.IsNullOrEmpty(userId) || ModeEquals(mode, "userId") || ModeEquals(mode, "userid");
+
+            if (codeMode)
+            {
+                DummyLoginState.RequestCodeLogin(code);
+                return "{\"ok\":true}";
+            }
+            if (userMode)
+            {
+                DummyLoginState.RequestUserIdLogin(userId);
+                return "{\"ok\":true}";
+            }
+            return "{\"ok\":false,\"error\":\"请提供 code 或 userId\"}";
+        }
+
+        private static bool ModeEquals(string value, string expected)
+        {
+            return !string.IsNullOrEmpty(value) && value.Equals(expected, StringComparison.OrdinalIgnoreCase);
         }
 
         private static List<TransferItem> ParseItems(string body, out int batchSize, out string error)
@@ -305,6 +341,7 @@ namespace SinmaiAssist.Utils
             sb.Append(",\"difficulty\":").Append(ScoreTransfer.CurrentDifficulty);
             sb.Append(",\"achievement\":").Append(ScoreTransfer.CurrentAchievement.ToString(CultureInfo.InvariantCulture));
             sb.Append(",\"inSongSelect\":").Append(MusicSelect.IsReady ? "true" : "false");
+            sb.Append(",\"loginMessage\":\"").Append(JsonEscape(DummyLoginState.LastMessage)).Append('"');
             sb.Append('}');
             return sb.ToString();
         }
@@ -663,6 +700,17 @@ namespace SinmaiAssist.Utils
       </div>
     </div>
   </details>
+  <details style=""margin-top:10px"">
+    <summary style=""cursor:pointer;font-size:13px;color:#9aa4b8"">登录（二维码 / UserID）</summary>
+    <div style=""margin-top:8px"">
+      <label>二维码内容 / Aime Code</label>
+      <input type=""text"" id=""loginCode"" placeholder=""20 位数字或二维码内容"" autocomplete=""off"">
+      <button id=""loginCodeBtn"" style=""margin-top:8px"">二维码登录</button>
+      <label style=""margin-top:10px"">UserID</label>
+      <input type=""text"" id=""loginUser"" placeholder=""UserID"" autocomplete=""off"">
+      <button id=""loginUserBtn"" style=""margin-top:8px"">UserID 登录</button>
+    </div>
+  </details>
 </header>
 <div id=""list""></div>
 <div class=""bar"">
@@ -783,6 +831,22 @@ document.getElementById('batchGo').onclick = () => {
 
 document.getElementById('batchStop').onclick = () => {
   fetch('/api/batchStop', {method:'POST'}).then(() => { statusEl.textContent = '已请求停止'; });
+};
+
+document.getElementById('loginCodeBtn').onclick = () => {
+  const code = document.getElementById('loginCode').value.trim();
+  if(!code){ statusEl.textContent = '请输入二维码内容'; return; }
+  fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode:'code', code: code})})
+    .then(r => r.json()).then(res => { statusEl.textContent = res.ok ? '已提交二维码登录' : ('登录失败: ' + res.error); })
+    .catch(e => { statusEl.textContent = '请求失败: ' + e; });
+};
+
+document.getElementById('loginUserBtn').onclick = () => {
+  const userId = document.getElementById('loginUser').value.trim();
+  if(!userId){ statusEl.textContent = '请输入 UserID'; return; }
+  fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode:'userId', userId: userId})})
+    .then(r => r.json()).then(res => { statusEl.textContent = res.ok ? '已提交 UserID 登录' : ('登录失败: ' + res.error); })
+    .catch(e => { statusEl.textContent = '请求失败: ' + e; });
 };
 
 searchEl.oninput = render;
