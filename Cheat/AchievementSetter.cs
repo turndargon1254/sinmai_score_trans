@@ -268,28 +268,28 @@ namespace SinmaiAssist.Cheat
                 double step = 1e6 * 50.0 / A;
                 double need = 1000000.0 - R;
                 long p0 = (long)Math.Round(need / step);
-                double bestWin = double.MaxValue, bestAny = double.MaxValue;
-                long pWin = 0, pAny = 0;
-                bool okWin = false;
+                double nbBestWin = double.MaxValue, nbBestAny = double.MaxValue;
+                long nbPWin = 0, nbPAny = 0;
+                bool nbOkWin = false;
                 for (long p = Math.Max(0, p0 - 300); p <= p0 + 300; p++)
                 {
                     if ((p & 1L) != 0) continue;
                     if (!CanRealizeGreats(p, nTapTouch, nHold, nSlide)) continue;
                     double stored = 1000000.0 - step * p;
                     double err = Math.Abs(stored - (R + 0.25));
-                    if (err < bestAny)
+                    if (err < nbBestAny)
                     {
-                        bestAny = err;
-                        pAny = p;
+                        nbBestAny = err;
+                        nbPAny = p;
                     }
-                    if (stored >= R && stored < R + 1 && err < bestWin)
+                    if (stored >= R && stored < R + 1 && err < nbBestWin)
                     {
-                        bestWin = err;
-                        pWin = p;
-                        okWin = true;
+                        nbBestWin = err;
+                        nbPWin = p;
+                        nbOkWin = true;
                     }
                 }
-                scoreUnits = okWin ? pWin : pAny;
+                scoreUnits = nbOkWin ? nbPWin : nbPAny;
                 return scoreUnits > 0;
             }
 
