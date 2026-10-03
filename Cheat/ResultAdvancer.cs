@@ -17,20 +17,22 @@ namespace SinmaiAssist.Cheat
     internal class ResultAdvancer
     {
         public static volatile bool Enabled;
-        private static bool _done;
+        private static int _tick;
+        private static bool _logged;
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(ResultProcess), "OnStart")]
         public static void OnStart()
         {
-            _done = false;
+            _tick = 0;
+            _logged = false;
         }
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(ResultProcess), "OnUpdate")]
         public static void OnUpdate(ResultProcess __instance)
         {
-            if (!Enabled || _done)
+            if (!Enabled)
             {
                 return;
             }
@@ -51,15 +53,25 @@ namespace SinmaiAssist.Cheat
                     return;
                 }
 
-                _done = true;
+                // Rating 跳整数(颜色变化)时结算会多出一次“框更新”等待确认的动画，
+                // 只按一次会卡住，因此这里循环按 ToNextCheck，直到离开该阶段。
+                _tick++;
+                if (_tick % 20 != 0)
+                {
+                    return;
+                }
+
                 MethodInfo toNextCheck = typeof(ResultProcess).GetMethod("ToNextCheck", BindingFlags.NonPublic | BindingFlags.Instance);
                 if (toNextCheck == null)
                 {
-                    MelonLogger.Warning("[ScoreTransfer] 找不到 ResultProcess.ToNextCheck");
                     return;
                 }
                 toNextCheck.Invoke(__instance, null);
-                MelonLogger.Msg("[ScoreTransfer] 已自动确认结算界面 (ToNextCheck)");
+                if (!_logged)
+                {
+                    _logged = true;
+                    MelonLogger.Msg("[ScoreTransfer] 已自动确认结算界面 (ToNextCheck，循环确认以兼容颜色变化)");
+                }
             }
             catch (Exception e)
             {

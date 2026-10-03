@@ -325,6 +325,17 @@ namespace SinmaiAssist.Cheat
                     }
                 }
 
+                // 默认判定：非断键 = 小P(FastPerfect)，断键 = Critical。
+                // 非断键 Perfect 与 Critical 对完成率同分，用小P可显著降低 DX score；断键默认 Critical。
+                for (int i = 0; i < notes.Count; i++)
+                {
+                    _plan[notes[i].indexNote] = NoteJudge.ETiming.FastPerfect;
+                }
+                for (int i = 0; i < breakIdx.Count; i++)
+                {
+                    _plan[breakIdx[i]] = NoteJudge.ETiming.Critical;
+                }
+
                 long R = (long)Math.Round((double)Target * 10000.0, MidpointRounding.AwayFromZero);
                 long maxStored = (B > 0) ? 1010000L : 1000000L;
                 if (R > maxStored) R = maxStored;
