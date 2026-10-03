@@ -126,7 +126,12 @@ namespace SinmaiAssist.Cheat
 
             int batchSize = Math.Max(1, SinmaiAssist.config.ScoreTransfer.BatchSize);
             float enterTimeout = Math.Max(5f, SinmaiAssist.config.ScoreTransfer.EnterTimeoutSeconds);
+            // fullPlay 会完整演奏整首（含长曲可能 3 分钟以上），单曲超时至少给 600 秒，避免中途超时。
             float trackTimeout = Math.Max(5f, SinmaiAssist.config.ScoreTransfer.TrackTimeoutSeconds);
+            if (SinmaiAssist.config.ScoreTransfer.FullPlay && trackTimeout < 600f)
+            {
+                trackTimeout = 600f;
+            }
             float uploadTimeout = Math.Max(5f, SinmaiAssist.config.ScoreTransfer.UploadTimeoutSeconds);
             float logoutTimeout = Math.Max(5f, SinmaiAssist.config.ScoreTransfer.LogoutTimeoutSeconds);
             float loginTimeout = Math.Max(5f, SinmaiAssist.config.ScoreTransfer.LoginTimeoutSeconds);
