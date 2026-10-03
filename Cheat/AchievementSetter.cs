@@ -208,20 +208,21 @@ namespace SinmaiAssist.Cheat
 
         [HarmonyPrefix]
         [HarmonyPatch(typeof(GameScoreList), "SetResult")]
-        public static void OverrideSetResult(int index, NoteScore.EScoreType scoreType, ref NoteJudge.ETiming timing)
+        public static void OverrideSetResult(object[] __args)
         {
-            if (!_planActive)
+            if (!_planActive || __args == null || __args.Length < 3)
             {
                 return;
             }
+            int index = (int)__args[0];
             _setResultCalls++;
             if (_plan.TryGetValue(index, out NoteJudge.ETiming planned))
             {
-                timing = planned;
+                __args[2] = planned;
                 _setResultOverrides++;
                 if (_setResultOverrides == 1)
                 {
-                    MelonLogger.Msg($"[ScoreTransfer] SetResult 覆盖生效: index={index} {timing} (plan={_plan.Count})");
+                    MelonLogger.Msg($"[ScoreTransfer] SetResult 覆盖生效: index={index} {planned} (plan={_plan.Count})");
                 }
             }
             else if (_setResultCalls == 1)
