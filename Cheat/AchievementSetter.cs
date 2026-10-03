@@ -5,6 +5,7 @@ using MelonLoader;
 using Monitor;
 using Process;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using Type = System.Type;
@@ -101,7 +102,8 @@ namespace SinmaiAssist.Cheat
                 Pending = false;
 
                 // 从此刻起，本曲上报的达成率直接用用户输入值。
-                ForcedAchievement = Target;
+                // 注意：游戏内部 Achivement = 百分比 * 10（101% => 1010），上传字段 = (int)(Achivement*1000)。
+                ForcedAchievement = Target * 10m;
                 OverrideActive = true;
 
                 var updateSubbMonitorData = typeof(GameProcess).GetMethod("UpdateSubbMonitorData", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -159,178 +161,226 @@ namespace SinmaiAssist.Cheat
             }
         }
 
+        // 游戏达成率（内部值，显示=该值/10）：
+        //   Achivement = score/A*1000 + bonus/B*10
+        // 其中 A=_allPerfectScore(每键 Critical 分之和)，B=_breakBonusScore(断键数*100)，
+        //   score = A - Δs，bonus = B - Δb。
+        // 上传/结算读取的整数 stored = (int)(Achivement*1000) = (int)(1e6*score/A + 1e4*bonus/B)
+        //   = (int)(1010000 - 1e6*Δs/A - 1e4*Δb/B)   (有断键时)
+        // 非断键：Critical 与 Perfect 得分完全相同，只有 Great 才会扣分：
+        //   Tap/Touch Great 扣100，Hold Great 扣200，Slide Great 扣300（均为50的倍数）
+        // 断键：Critical bonus=100，Perfect bonus=75（Δb=25/个），据此微调小数。
+        // 因此用「断键 Perfect 微调 + 非断键 Great 粗调」可精确凑出目标。
         [HarmonyPrefix]
         [HarmonyPatch(typeof(GameScoreList), "SetForceAchivement")]
         public static bool SetForceAchivement(int achivement, int dxscore, GameScoreList __instance)
         {
-            decimal num1 = Target;
-            long num2;
-            long num3;
-            if (num1 > 100.0m)
+            try
             {
-                num2 = (long)((decimal)__instance.ScoreTotal._allPerfectScore * (num1 - 1.0m) * 0.01m);
-                num3 = __instance.ScoreTotal._breakBonusScore;
-            }
-            else
-            {
-                num2 = (long)((decimal)__instance.ScoreTotal._allPerfectScore * (num1 * 0.99m * 0.01m));
-                num3 = (long)((decimal)__instance.ScoreTotal._breakBonusScore * num1 * 0.01m);
-            }
-
-            NoteJudge.ETiming[] noteArray = new NoteJudge.ETiming[7]
-            {
-                NoteJudge.ETiming.Critical,
-                NoteJudge.ETiming.FastGreat,
-                NoteJudge.ETiming.FastGreat2nd,
-                NoteJudge.ETiming.LateGreat,
-                NoteJudge.ETiming.LateGreat2nd,
-                NoteJudge.ETiming.LateGreat3rd,
-                NoteJudge.ETiming.LateGood
-            };
-
-            int monitorIndex = (int)typeof(GameScoreList)
-                .GetField("_monitorIndex", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(__instance);
-            NoteDataList noteList = NotesManager.Instance(monitorIndex).getReader().GetNoteList();
-
-            foreach (NoteData item in noteList)
-            {
-                if (!item.type.isBreakScore())
+                int monitorIndex = (int)typeof(GameScoreList)
+                    .GetField("_monitorIndex", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .GetValue(__instance);
+                NoteDataList rawList = NotesManager.Instance(monitorIndex).getReader().GetNoteList();
+                List<NoteData> notes = new List<NoteData>();
+                foreach (NoteData n in rawList)
                 {
-                    continue;
+                    notes.Add(n);
                 }
-                bool flag = false;
-                foreach (NoteJudge.ETiming timing in noteArray)
+
+                long A = __instance.ScoreTotal._allPerfectScore;
+                long B = __instance.ScoreTotal._breakBonusScore;
+
+                List<int> tapIdx = new List<int>();
+                List<int> touchIdx = new List<int>();
+                List<int> holdIdx = new List<int>();
+                List<int> slideIdx = new List<int>();
+                List<int> breakIdx = new List<int>();
+                for (int i = 0; i < notes.Count; i++)
                 {
-                    NoteScore.EScoreType scoreType = GamePlayManager.NoteType2ScoreType(item.type.getEnum());
-                    if (0m <= (decimal)(num2 - NoteScore.GetJudgeScore(timing, NoteScore.EScoreType.Break)) &&
-                        0m <= (decimal)(num3 - NoteScore.GetJudgeScore(timing, NoteScore.EScoreType.BreakBonus)))
+                    NoteScore.EScoreType st = GamePlayManager.NoteType2ScoreType(notes[i].type.getEnum());
+                    switch (st)
                     {
-                        num2 -= NoteScore.GetJudgeScore(timing, scoreType);
-                        num3 -= NoteScore.GetJudgeScore(timing, NoteScore.EScoreType.BreakBonus);
-                        __instance.SetResult(item.indexNote, scoreType, timing);
-                        flag = true;
-                        break;
+                        case NoteScore.EScoreType.Hold: holdIdx.Add(i); break;
+                        case NoteScore.EScoreType.Slide: slideIdx.Add(i); break;
+                        case NoteScore.EScoreType.Break: breakIdx.Add(i); break;
+                        case NoteScore.EScoreType.Touch: touchIdx.Add(i); break;
+                        default: tapIdx.Add(i); break;
                     }
                 }
-                if (!flag)
-                {
-                    __instance.SetResult(item.indexNote, NoteScore.EScoreType.Break, NoteJudge.ETiming.TooFast);
 
+                long R = (long)Math.Round((double)Target * 10000.0, MidpointRounding.AwayFromZero);
+                long maxStored = (B > 0) ? 1010000L : 1000000L;
+                if (R > maxStored) R = maxStored;
+                if (R < 0) R = 0;
+
+                NoteJudge.ETiming[] timing = new NoteJudge.ETiming[notes.Count];
+                for (int i = 0; i < timing.Length; i++)
+                {
+                    timing[i] = NoteJudge.ETiming.Critical;
+                }
+
+                long scoreUnits;   // Δs / 50
+                int breakPerfect;  // 需要设为 Perfect(而非 Critical) 的断键数量，Δb = 25 * 该值
+                if (Solve(R, A, B, breakIdx.Count, tapIdx.Count + touchIdx.Count, holdIdx.Count, slideIdx.Count,
+                          out scoreUnits, out breakPerfect))
+                {
+                    for (int k = 0; k < breakPerfect && k < breakIdx.Count; k++)
+                    {
+                        timing[breakIdx[k]] = NoteJudge.ETiming.FastPerfect;
+                    }
+                    AssignScorePenalty(timing, slideIdx, holdIdx, tapIdx, touchIdx, scoreUnits);
+                }
+                else
+                {
+                    MelonLogger.Warning($"[ScoreTransfer] 无法精确凑出达成率 {Target}，本曲退化为全 Perfect");
+                }
+
+                for (int i = 0; i < notes.Count; i++)
+                {
+                    NoteScore.EScoreType st = GamePlayManager.NoteType2ScoreType(notes[i].type.getEnum());
+                    __instance.SetResult(notes[i].indexNote, st, timing[i]);
                 }
             }
-
-            int num4 = 0;
-            int num5 = 0;
-            long num6 = 0L;
-            for (int j = 0; j < noteArray.Length; j++)
+            catch (Exception e)
             {
-                long num7 = num2;
-                long num8 = 0L;
-                num8 += __instance.ScoreTotal.GetTapNum() * NoteScore.GetJudgeScore(noteArray[j]);
-                num8 += __instance.ScoreTotal.GetHoldNum() * NoteScore.GetJudgeScore(noteArray[j], NoteScore.EScoreType.Hold);
-                num8 += __instance.ScoreTotal.GetSlideNum() * NoteScore.GetJudgeScore(noteArray[j], NoteScore.EScoreType.Slide);
-                num8 += __instance.ScoreTotal.GetTouchNum() * NoteScore.GetJudgeScore(noteArray[j], NoteScore.EScoreType.Touch);
-                if (num8 <= num7)
+                MelonLogger.Error(e);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 求 (Δs/50, 断键Perfect数) 使结果 stored 精确等于 R。
+        /// 只用偶数 scoreUnits（即 Δs 为 100 的倍数），可由 Great 组合精确实现。
+        /// </summary>
+        private static bool Solve(long R, long A, long B, int nBreak, int nTapTouch, int nHold, int nSlide,
+                                  out long scoreUnits, out int breakPerfect)
+        {
+            scoreUnits = 0;
+            breakPerfect = 0;
+            if (A <= 0)
+            {
+                return false;
+            }
+
+            if (B <= 0)
+            {
+                // 无断键：stored = 1e6 - 1e6*Δs/A
+                double step = 1e6 * 50.0 / A;
+                double need = 1000000.0 - R;
+                long p0 = (long)Math.Round(need / step);
+                double bestWin = double.MaxValue, bestAny = double.MaxValue;
+                long pWin = 0, pAny = 0;
+                bool okWin = false;
+                for (long p = Math.Max(0, p0 - 300); p <= p0 + 300; p++)
                 {
-                    num6 = num7 - num8;
-                    num5 = num4 != 0 ? num4 - 1 : 0;
+                    if ((p & 1L) != 0) continue;
+                    if (!CanRealizeGreats(p, nTapTouch, nHold, nSlide)) continue;
+                    double stored = 1000000.0 - step * p;
+                    double err = Math.Abs(stored - (R + 0.25));
+                    if (err < bestAny)
+                    {
+                        bestAny = err;
+                        pAny = p;
+                    }
+                    if (stored >= R && stored < R + 1 && err < bestWin)
+                    {
+                        bestWin = err;
+                        pWin = p;
+                        okWin = true;
+                    }
+                }
+                scoreUnits = okWin ? pWin : pAny;
+                return scoreUnits > 0;
+            }
+
+            double sStep = 1e6 * 50.0 / A;   // 每 scoreUnit(50分)
+            double bStep = 1e4 * 25.0 / B;   // 每个断键 Perfect(Δb=25)
+            double D = 1010000.0 - R;
+            double bestWin = double.MaxValue, bestAny = double.MaxValue;
+            long pWin = 0, pAny = 0;
+            int jWin = 0, jAny = 0;
+            bool okWin = false;
+            for (int j = 0; j <= nBreak; j++)
+            {
+                double rem = D - bStep * j;
+                if (rem < -0.5)
+                {
                     break;
                 }
-                num4++;
+                long p0 = (long)Math.Round(rem / sStep);
+                for (long p = Math.Max(0, p0 - 64); p <= p0 + 64; p++)
+                {
+                    if ((p & 1L) != 0) continue;
+                    if (!CanRealizeGreats(p, nTapTouch, nHold, nSlide)) continue;
+                    double stored = 1010000.0 - (sStep * p + bStep * j);
+                    double err = Math.Abs(stored - (R + 0.25));
+                    if (err < bestAny)
+                    {
+                        bestAny = err;
+                        pAny = p;
+                        jAny = j;
+                    }
+                    if (stored >= R && stored < R + 1 && err < bestWin)
+                    {
+                        bestWin = err;
+                        pWin = p;
+                        jWin = j;
+                        okWin = true;
+                    }
+                }
             }
-            if (num4 >= noteArray.Length)
+            if (okWin)
             {
-                num4 = noteArray.Length - 1;
+                scoreUnits = pWin;
+                breakPerfect = jWin;
+                return true;
             }
+            scoreUnits = pAny;
+            breakPerfect = jAny;
+            return bestAny < double.MaxValue;
+        }
 
-            foreach (NoteData item2 in noteList)
+        /// <summary>
+        /// 判断 Δs = 50*p 能否由各类型 Great 精确组成。
+        /// Great 扣分单位为(50分): Tap/Touch=2, Hold=4, Slide=6。p 为偶数时转为 100 分单位 q=p/2，
+        /// 币值 1/2/3；贪心先用大币再补 1 币，若 1 币不够则无解。
+        /// </summary>
+        private static bool CanRealizeGreats(long p, int c1, int c2, int c3)
+        {
+            if ((p & 1L) != 0)
             {
-                if (!item2.type.isSlideScore())
-                {
-                    continue;
-                }
-                NoteScore.EScoreType scoreType = GamePlayManager.NoteType2ScoreType(item2.type.getEnum());
-                NoteJudge.ETiming timing = noteArray[num4];
-                NoteJudge.ETiming timing2 = noteArray[num5];
-                if (0m <= (decimal)num6 && 0m <= (decimal)(num2 - NoteScore.GetJudgeScore(timing2, scoreType)))
-                {
-                    num6 -= NoteScore.GetJudgeScore(timing2, scoreType) - NoteScore.GetJudgeScore(timing, scoreType);
-                    num2 -= NoteScore.GetJudgeScore(timing2, scoreType);
-                    __instance.SetResult(item2.indexNote, scoreType, timing2);
-                }
-                else if (0m <= (decimal)(num2 - NoteScore.GetJudgeScore(timing, scoreType)))
-                {
-                    num2 -= NoteScore.GetJudgeScore(timing, scoreType);
-                    __instance.SetResult(item2.indexNote, scoreType, timing);
-                }
-                else
-                {
-                    __instance.SetResult(item2.indexNote, scoreType, NoteJudge.ETiming.TooFast);
-
-                }
+                return false;
             }
-
-            foreach (NoteData item3 in noteList)
+            long q = p / 2;
+            if (q == 0)
             {
-                if (!item3.type.isHoldScore())
-                {
-                    continue;
-                }
-                NoteScore.EScoreType scoreType = GamePlayManager.NoteType2ScoreType(item3.type.getEnum());
-                NoteJudge.ETiming timing = noteArray[num4];
-                NoteJudge.ETiming timing2 = noteArray[num5];
-                if (0m <= (decimal)num6 && 0m <= (decimal)(num2 - NoteScore.GetJudgeScore(timing2, scoreType)))
-                {
-                    num6 -= NoteScore.GetJudgeScore(timing2, scoreType) - NoteScore.GetJudgeScore(timing, scoreType);
-                    num2 -= NoteScore.GetJudgeScore(timing2, scoreType);
-                    __instance.SetResult(item3.indexNote, scoreType, timing2);
-                }
-                else if (0m <= (decimal)(num2 - NoteScore.GetJudgeScore(timing, scoreType)))
-                {
-                    num2 -= NoteScore.GetJudgeScore(timing, scoreType);
-                    __instance.SetResult(item3.indexNote, scoreType, timing);
-                }
-                else
-                {
-                    __instance.SetResult(item3.indexNote, scoreType, NoteJudge.ETiming.TooFast);
-
-                }
+                return true;
             }
+            int s3 = (int)Math.Min(c3, q / 3);
+            long rem = q - 3L * s3;
+            int s2 = (int)Math.Min(c2, rem / 2);
+            long s1 = rem - 2L * s2;
+            return s1 <= c1;
+        }
 
-            foreach (NoteData item4 in noteList)
+        private static void AssignScorePenalty(NoteJudge.ETiming[] timing, List<int> slideIdx, List<int> holdIdx,
+                                               List<int> tapIdx, List<int> touchIdx, long p)
+        {
+            if (p <= 0)
             {
-                if (!item4.type.isTapScore())
-                {
-                    continue;
-                }
-                NoteScore.EScoreType scoreType = GamePlayManager.NoteType2ScoreType(item4.type.getEnum());
-                NoteJudge.ETiming timing = noteArray[num4];
-                NoteJudge.ETiming timing2 = noteArray[num5];
-                if (0m < (decimal)num6 && 0m <= (decimal)(num2 - NoteScore.GetJudgeScore(timing2, scoreType)))
-                {
-                    num6 -= NoteScore.GetJudgeScore(timing2, scoreType) - NoteScore.GetJudgeScore(timing, scoreType);
-                    num2 -= NoteScore.GetJudgeScore(timing2, scoreType);
-                    __instance.SetResult(item4.indexNote, scoreType, timing2);
-                }
-                else if (0m <= (decimal)(num2 - NoteScore.GetJudgeScore(timing, scoreType)))
-                {
-                    num2 -= NoteScore.GetJudgeScore(timing, scoreType);
-                    __instance.SetResult(item4.indexNote, scoreType, timing);
-                }
-                else if (0m < (decimal)num2)
-                {
-                    num2 -= NoteScore.GetJudgeScore(timing, scoreType);
-                    __instance.SetResult(item4.indexNote, scoreType, timing);
-                }
-                else
-                {
-                    __instance.SetResult(item4.indexNote, scoreType, NoteJudge.ETiming.TooFast);
-
-                }
+                return;
             }
+            long q = p / 2;
+            int s3 = (int)Math.Min(slideIdx.Count, q / 3);
+            long rem = q - 3L * s3;
+            int s2 = (int)Math.Min(holdIdx.Count, rem / 2);
+            long s1 = rem - 2L * s2;
 
-            return false;
+            for (int i = 0; i < s3; i++) timing[slideIdx[i]] = NoteJudge.ETiming.FastGreat;
+            for (int i = 0; i < s2; i++) timing[holdIdx[i]] = NoteJudge.ETiming.FastGreat;
+            int placed = 0;
+            for (int i = 0; i < tapIdx.Count && placed < s1; i++, placed++) timing[tapIdx[i]] = NoteJudge.ETiming.FastGreat;
+            for (int i = 0; i < touchIdx.Count && placed < s1; i++, placed++) timing[touchIdx[i]] = NoteJudge.ETiming.FastGreat;
         }
     }
 }
