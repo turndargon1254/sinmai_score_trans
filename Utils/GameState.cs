@@ -189,7 +189,7 @@ namespace SinmaiAssist.Utils
                     {
                         continue;
                     }
-                    if (!Singleton<UserDataManager>.Instance.GetUserData(i).IsActiveUser())
+                    if (!Singleton<UserDataManager>.Instance.GetUserData(i).IsActiveUser)
                     {
                         continue;
                     }
