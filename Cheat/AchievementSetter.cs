@@ -188,31 +188,81 @@ namespace SinmaiAssist.Cheat
         /// 这里按预先算好的计划改写该音符的判定，从而精确命中目标达成率，
         /// 同时保持整首真实时长/Note 进度（playlog 看起来就是一把正常游玩）。
         /// </summary>
-        private static int _setResultCalls;
-        private static int _setResultOverrides;
+        private static int _overrideCount;
         private static bool _resultLogged;
 
-        [HarmonyPrefix]
-        [HarmonyPatch(typeof(GameScoreList), "SetResult")]
-        public static void OverrideSetResult(int index, NoteScore.EScoreType scoreType, ref NoteJudge.ETiming timing)
+        private static NoteJudge.ETiming PlannedFor(int noteIndex)
         {
-            if (!_planActive)
+            if (_planActive && _plan.TryGetValue(noteIndex, out NoteJudge.ETiming t))
             {
-                return;
+                return t;
             }
-            _setResultCalls++;
-            if (_plan.TryGetValue(index, out NoteJudge.ETiming planned))
+            return NoteJudge.ETiming.Critical;
+        }
+
+        // AutoPlay 的判定来源：Tap/Touch 走 NoteBase.SetAutoPlayJudge，Hold 走 JudgeTotalResult，
+        // Slide 走 SlideRoot.Judge。这里在游戏自动判定之后，用我们预计算的档位覆盖 JudgeResult。
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(NoteBase), "SetAutoPlayJudge")]
+        public static void P_TapAutoJudge(NoteBase __instance)
+        {
+            if (_planActive)
             {
-                timing = planned;
-                _setResultOverrides++;
-                if (_setResultOverrides == 1)
-                {
-                    MelonLogger.Msg($"[ScoreTransfer] SetResult 覆盖生效: index={index} {planned} (plan={_plan.Count})");
-                }
+                __instance.JudgeResult = PlannedFor(__instance.NoteIndex);
+                LogOverrideOnce(__instance.NoteIndex);
             }
-            else if (_setResultCalls == 1)
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(HoldNote), "JudgeTotalResult")]
+        public static void P_HoldJudge(HoldNote __instance)
+        {
+            if (_planActive)
             {
-                MelonLogger.Warning($"[ScoreTransfer] SetResult 首次调用 index={index} 不在 plan（plan={_plan.Count}）");
+                __instance.JudgeResult = PlannedFor(__instance.NoteIndex);
+                LogOverrideOnce(__instance.NoteIndex);
+            }
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(BreakHoldNote), "JudgeTotalResult")]
+        public static void P_BreakHoldJudge(BreakHoldNote __instance)
+        {
+            if (_planActive)
+            {
+                __instance.JudgeResult = PlannedFor(__instance.NoteIndex);
+                LogOverrideOnce(__instance.NoteIndex);
+            }
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(TouchHoldC), "JudgeTotalResult")]
+        public static void P_TouchHoldJudge(TouchHoldC __instance)
+        {
+            if (_planActive)
+            {
+                __instance.JudgeResult = PlannedFor(__instance.NoteIndex);
+                LogOverrideOnce(__instance.NoteIndex);
+            }
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(SlideRoot), "Judge")]
+        public static void P_SlideJudge(SlideRoot __instance)
+        {
+            if (_planActive)
+            {
+                __instance.JudgeResult = PlannedFor(__instance.NoteIndex);
+                LogOverrideOnce(__instance.NoteIndex);
+            }
+        }
+
+        private static void LogOverrideOnce(int noteIndex)
+        {
+            _overrideCount++;
+            if (_overrideCount == 1)
+            {
+                MelonLogger.Msg($"[ScoreTransfer] AutoJudge 覆盖生效: index={noteIndex} (plan={_plan.Count})");
             }
         }
 
@@ -224,8 +274,7 @@ namespace SinmaiAssist.Cheat
             try
             {
                 _plan.Clear();
-                _setResultCalls = 0;
-                _setResultOverrides = 0;
+                _overrideCount = 0;
                 _resultLogged = false;
                 int monitorIndex = -1;
                 for (int i = 0; i < 2; i++)
