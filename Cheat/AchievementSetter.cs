@@ -35,14 +35,6 @@ namespace SinmaiAssist.Cheat
         public static bool Pending = false;
         public static decimal Target = 0m;
 
-        // 强制上报的达成率。游戏是按音符逐键累加算出达成率的，
-        // 但非断键的 Perfect/Critical 得分完全相同、断键 bonus 只有 0/30/40/50/75/100 这些离散档，
-        // 因此绝大多数形如 100.xxxx 的目标值在数学上无法由音符组合精确命中。
-        // 而结果页与上传的 achievement 字段都直接读 GameScoreList.GetAchivement()，
-        // 服务器信任客户端上报值，所以这里直接把上报达成率钉死为目标值。
-        public static decimal ForcedAchievement = -1m;
-        public static bool OverrideActive = false;
-
         // 进入谱面后先正常游玩多久(秒)再强制结算。太短服务器会判定不合法而丢弃成绩。
         private static float _playStartTime = -1f;
 
@@ -50,20 +42,6 @@ namespace SinmaiAssist.Cheat
         // 这样上传的是一条“真实打过”的 playlog，服务器更容易接受。
         private static bool _planActive = false;
         private static readonly Dictionary<int, NoteJudge.ETiming> _plan = new Dictionary<int, NoteJudge.ETiming>();
-
-        /// <summary>
-        /// 结果页显示、成绩上传(ExportUserPlaylog)都通过 get_Achivement() 读取达成率。
-        /// 在强制结算生效期间，直接返回用户输入的目标达成率，保证与输入完全一致。
-        /// </summary>
-        [HarmonyPostfix]
-        [HarmonyPatch(typeof(GameScoreList), "get_Achivement")]
-        public static void OverrideAchivement(ref decimal __result)
-        {
-            if (OverrideActive && ForcedAchievement >= 0m)
-            {
-                __result = ForcedAchievement;
-            }
-        }
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(GameProcess), "OnUpdate")]
@@ -79,7 +57,6 @@ namespace SinmaiAssist.Cheat
                 // 新的一首进入 Init~StartWait 阶段时清除上一首的达成率覆盖标记。
                 if (sequence < GameSequence.Play)
                 {
-                    OverrideActive = false;
                     _planActive = false;
                     _plan.Clear();
                     // 非转移目标曲目时关闭自动演奏，避免影响正常游玩。
@@ -137,11 +114,6 @@ namespace SinmaiAssist.Cheat
 
                 _playStartTime = -1f;
                 Pending = false;
-
-                // 从此刻起，本曲上报的达成率直接用用户输入值。
-                // 注意：游戏内部 Achivement = 百分比 * 10（101% => 1010），上传字段 = (int)(Achivement*1000)。
-                ForcedAchievement = Target * 10m;
-                OverrideActive = true;
 
                 var updateSubbMonitorData = typeof(GameProcess).GetMethod("UpdateSubbMonitorData", BindingFlags.NonPublic | BindingFlags.Instance);
                 var setRelease = typeof(GameProcess).GetMethod("SetRelease", BindingFlags.NonPublic | BindingFlags.Instance);
