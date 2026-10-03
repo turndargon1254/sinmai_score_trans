@@ -97,6 +97,7 @@ namespace SinmaiAssist
             "  minSessionSeconds: 120 # 保证从登录到登出(结算/上传)至少持续这么久，不够会先停留（服务器只在登出时接收上传）\r\n" +
             "  songWaitSeconds: 0 # 每首开始前额外等待多少秒（一般不需要，MinSession 已兜底）\r\n" +
             "  playWaitSeconds: 60 # 进入谱面后先正常游玩多久再强制结算（太短服务器会拒收，建议≥60）\r\n" +
+            "  autoContinue: true # 一批(4首)打完后若有剩余曲目，自动在“继续游戏”界面选择继续（不登出，继续下一批）\r\n" +
             "dummyLogin: # 自动登录(刷卡)\r\n" +
             "  enable: true # 是否启用\r\n" +
             "  defaultUserId: 1 # 默认用户ID\r\n";
@@ -118,6 +119,7 @@ namespace SinmaiAssist
                 case "minSessionSeconds": cfg.MinSessionSeconds = ParseFloat(value, cfg.MinSessionSeconds); break;
                 case "songWaitSeconds": cfg.SongWaitSeconds = ParseFloat(value, cfg.SongWaitSeconds); break;
                 case "playWaitSeconds": cfg.PlayWaitSeconds = ParseFloat(value, cfg.PlayWaitSeconds); break;
+                case "autoContinue": cfg.AutoContinue = ParseBool(value); break;
             }
         }
 
@@ -170,6 +172,7 @@ namespace SinmaiAssist
         public float MinSessionSeconds { get; set; } = 120f;
         public float SongWaitSeconds { get; set; } = 0f;
         public float PlayWaitSeconds { get; set; } = 60f;
+        public bool AutoContinue { get; set; } = true;
     }
 
     public class DummyLoginConfig

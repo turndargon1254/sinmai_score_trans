@@ -12,6 +12,7 @@
   minSessionSeconds: 120
   songWaitSeconds: 0
   playWaitSeconds: 60
+  autoContinue: true
 dummyLogin:
   enable: true
   defaultUserId: 1

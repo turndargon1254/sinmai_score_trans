@@ -37,6 +37,7 @@ namespace SinmaiAssist.Cheat
         private static List<TransferItem> _pendingItems;
         private static bool _lastWaitOk;
         private static bool _sessionEnded;
+        private static bool _continuePrompt;
         private static bool _sessionPlayedAnyTrack;
         private static TransferItem _lastPlayedItem;
         private static float _loginRealtime;
@@ -173,6 +174,21 @@ namespace SinmaiAssist.Cheat
                     _lastPlayedItem = item;
                 }
 
+                if (_continuePrompt)
+                {
+                    _continuePrompt = false;
+                    bool moreItems = i < items.Count - 1;
+                    if (moreItems && SinmaiAssist.config.ScoreTransfer.AutoContinue)
+                    {
+                        yield return ContinueSession(session, enterTimeout);
+                        continue;
+                    }
+                    // 没有更多曲目：不续关，让它正常结算/登出
+                    yield return HandleSessionEnd(session, true, uploadTimeout, logoutTimeout, loginTimeout);
+                    sessionOpen = false;
+                    continue;
+                }
+
                 if (_sessionEnded)
                 {
                     bool isLast = i >= items.Count - 1;
@@ -268,6 +284,38 @@ namespace SinmaiAssist.Cheat
                 t += Time.deltaTime;
                 yield return null;
             }
+        }
+
+        /// <summary>
+        /// 在"继续游戏"界面自动续关，并等待回到选曲界面（同一登录会话内继续下一批，不登出）。
+        /// </summary>
+        private static IEnumerator ContinueSession(int session, float enterTimeout)
+        {
+            State = "Continuing";
+            Message = "Continuing";
+            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] 检测到续关界面，自动续关（不登出，继续下一批）");
+            GameState.TrySelectContinue();
+
+            float t = 0f;
+            while (t < enterTimeout)
+            {
+                if (GameState.IsMusicSelect && MusicSelect.IsReady)
+                {
+                    _lastWaitOk = true;
+                    _sessionPlayedAnyTrack = false;
+                    _lastPlayedItem = null;
+                    State = "LoggedIn";
+                    Message = "LoggedIn";
+                    MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] 续关成功，继续转移");
+                    yield break;
+                }
+                GameState.TryAutoAdvance();
+                LogSnapshot("等待续关后选曲界面");
+                t += Time.deltaTime;
+                yield return null;
+            }
+            _lastWaitOk = false;
+            MelonLogger.Warning($"[ScoreTransfer] [Batch {session}] 续关后未回到选曲界面");
         }
 
         /// <summary>
@@ -384,6 +432,7 @@ namespace SinmaiAssist.Cheat
         private static IEnumerator RunSingle(TransferItem item, float enterTimeout, float trackTimeout)
         {
             _sessionEnded = false;
+            _continuePrompt = false;
 
             float waited = 0f;
             while (ScoreTransfer.IsBusy && waited < enterTimeout)
@@ -448,6 +497,12 @@ namespace SinmaiAssist.Cheat
             float t = 0f;
             while (t < timeout)
             {
+                if (GameState.IsContinuePrompt)
+                {
+                    _lastWaitOk = true;
+                    _continuePrompt = true;
+                    yield break;
+                }
                 if (GameState.IsSessionEnding)
                 {
                     _lastWaitOk = true;

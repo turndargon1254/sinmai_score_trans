@@ -49,10 +49,9 @@ namespace SinmaiAssist.Utils
             "Process.InformationProcess"
         };
 
-        // 表示本局结束/结算相关的流程
+        // 表示本局结束/结算相关的流程（注意：ContinueProcess 单独处理，见 IsContinuePrompt）
         private static readonly HashSet<string> SessionEndProcesses = new HashSet<string>
         {
-            "Process.ContinueProcess",
             "Process.GameOverProcess",
             "Process.PhotoEditProcess",
             "Process.DataSaveProcess",
@@ -85,6 +84,12 @@ namespace SinmaiAssist.Utils
         public static bool IsMusicSelect
         {
             get { return HasProcess("Process.MusicSelectProcess"); }
+        }
+
+        /// <summary>是否处于"继续游戏"确认界面。</summary>
+        public static bool IsContinuePrompt
+        {
+            get { return HasProcess("Process.ContinueProcess"); }
         }
 
         public static bool IsSessionEnding
@@ -131,6 +136,81 @@ namespace SinmaiAssist.Utils
                 }
             }
             return result;
+        }
+
+        public static ProcessBase FindProcess(string name)
+        {
+            IEnumerable list = GetProcessList();
+            if (list == null)
+            {
+                return null;
+            }
+            foreach (object controle in list)
+            {
+                ProcessBase process = GetProcess(controle);
+                if (process != null && process.ToString() == name)
+                {
+                    return process;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 在"继续游戏"界面自动选择"继续"（不换人）。做法与游戏 ContinueProcess 内部一致：
+        /// 对每个已登录玩家调用 ContinueMonitor.SelectContinue() 并写 GameManager.IsSelectContinue，
+        /// 最后 ForceTimeUp 让状态机前进。
+        /// </summary>
+        public static bool TrySelectContinue()
+        {
+            ProcessBase process = FindProcess("Process.ContinueProcess");
+            if (process == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                FieldInfo monitorsField = process.GetType().GetField(
+                    "_monitors", BindingFlags.NonPublic | BindingFlags.Instance);
+                Array monitors = monitorsField?.GetValue(process) as Array;
+                if (monitors == null)
+                {
+                    return false;
+                }
+
+                bool[] selectContinue = Manager.GameManager.IsSelectContinue;
+                int count = Math.Min(monitors.Length, selectContinue.Length);
+                MethodInfo selectMethod = null;
+                for (int i = 0; i < count; i++)
+                {
+                    object monitor = monitors.GetValue(i);
+                    if (monitor == null)
+                    {
+                        continue;
+                    }
+                    if (!Singleton<UserDataManager>.Instance.GetUserData(i).IsActiveUser())
+                    {
+                        continue;
+                    }
+                    if (selectMethod == null)
+                    {
+                        selectMethod = monitor.GetType().GetMethod(
+                            "SelectContinue", BindingFlags.Public | BindingFlags.Instance);
+                    }
+                    selectMethod?.Invoke(monitor, null);
+                    selectContinue[i] = true;
+                }
+
+                Container?.processManager?.ForceTimeUp();
+                MelonLogger.Msg("[ScoreTransfer] 已在续关界面选择“继续”");
+                return true;
+            }
+            catch (Exception e)
+            {
+                MelonLogger.Warning($"[ScoreTransfer] 续关失败: {e.Message}");
+                return false;
+            }
         }
 
         /// <summary>

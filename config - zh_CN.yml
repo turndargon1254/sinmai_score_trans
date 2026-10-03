@@ -12,6 +12,7 @@
   minSessionSeconds: 120 # 保证登录→登出(结算/上传)至少持续这么久(秒)
   songWaitSeconds: 0 # 每首开始前额外等待(秒)，一般不需要
   playWaitSeconds: 60 # 进入谱面后先正常游玩多久再强制结算(秒)，太短服务器会拒收，建议≥60
+  autoContinue: true # 一批打完后若有剩余曲目，自动在“继续游戏”界面续关（不登出）
 dummyLogin: # 自动登录(刷卡)
   enable: true # 是否启用
   defaultUserId: 1 # 默认用户ID
