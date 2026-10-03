@@ -46,6 +46,11 @@ namespace SinmaiAssist.Cheat
         // 进入谱面后先正常游玩多久(秒)再强制结算。太短服务器会判定不合法而丢弃成绩。
         private static float _playStartTime = -1f;
 
+        // fullPlay 模式：让游戏自动完整演奏整首(真实判定/时长)，我们只逐键改写判定，
+        // 这样上传的是一条“真实打过”的 playlog，服务器更容易接受。
+        private static bool _planActive = false;
+        private static readonly Dictionary<int, NoteJudge.ETiming> _plan = new Dictionary<int, NoteJudge.ETiming>();
+
         /// <summary>
         /// 结果页显示、成绩上传(ExportUserPlaylog)都通过 get_Achivement() 读取达成率。
         /// 在强制结算生效期间，直接返回用户输入的目标达成率，保证与输入完全一致。
@@ -75,6 +80,13 @@ namespace SinmaiAssist.Cheat
                 if (sequence < GameSequence.Play)
                 {
                     OverrideActive = false;
+                    _planActive = false;
+                    _plan.Clear();
+                    // 非转移目标曲目时关闭自动演奏，避免影响正常游玩。
+                    if (SinmaiAssist.config.ScoreTransfer.FullPlay && !Pending)
+                    {
+                        GameManager.AutoPlay = GameManager.AutoPlayMode.None;
+                    }
                 }
 
                 if (sequence >= GameSequence.Release)
@@ -82,6 +94,31 @@ namespace SinmaiAssist.Cheat
                     _playStartTime = -1f;
                     return;
                 }
+
+                bool fullPlay = SinmaiAssist.config.ScoreTransfer.FullPlay;
+
+                // ---- fullPlay：开启自动演奏，整首真实打完，只逐键改写判定 ----
+                if (fullPlay && sequence == GameSequence.Play)
+                {
+                    if (Pending)
+                    {
+                        GameManager.AutoPlay = GameManager.AutoPlayMode.Critical;
+                        BuildPlan(__instance);
+                        ForcedAchievement = Target * 10m;
+                        OverrideActive = true;
+                        _planActive = true;
+                        Pending = false;
+                        MelonLogger.Msg($"[ScoreTransfer] fullPlay: 自动完整演奏，逐键命中 {Target}%");
+                    }
+                    return;
+                }
+
+                if (fullPlay)
+                {
+                    return;
+                }
+
+                // ---- 非 fullPlay：旧的高速强制结算 ----
                 if (sequence < GameSequence.Play || GameManager.IsNoteCheckMode || !Pending)
                 {
                     return;
@@ -154,6 +191,110 @@ namespace SinmaiAssist.Cheat
                     }
                 }
                 setRelease.Invoke(__instance, null);
+            }
+            catch (Exception e)
+            {
+                MelonLogger.Error(e);
+            }
+        }
+
+        /// <summary>
+        /// fullPlay 模式下，游戏自动演奏时会为每个音符调用 SetResult。
+        /// 这里按预先算好的计划改写该音符的判定，从而精确命中目标达成率，
+        /// 同时保持整首真实时长/Note 进度（playlog 看起来就是一把正常游玩）。
+        /// </summary>
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(GameScoreList), "SetResult")]
+        public static void OverrideSetResult(int index, NoteScore.EScoreType scoreType, ref NoteJudge.ETiming timing)
+        {
+            if (_planActive && _plan.TryGetValue(index, out NoteJudge.ETiming planned))
+            {
+                timing = planned;
+            }
+        }
+
+        /// <summary>
+        /// 依据目标达成率，为当前谱面每个 Note 预计算判定（默认全 Critical，部分改 Great/Perfect）。
+        /// </summary>
+        private static void BuildPlan(GameProcess process)
+        {
+            try
+            {
+                _plan.Clear();
+                int monitorIndex = -1;
+                for (int i = 0; i < 2; i++)
+                {
+                    if (Singleton<UserDataManager>.Instance.GetUserData(i).IsEntry)
+                    {
+                        monitorIndex = i;
+                        break;
+                    }
+                }
+                if (monitorIndex < 0)
+                {
+                    return;
+                }
+                GameScoreList score = Singleton<GamePlayManager>.Instance.GetGameScore(monitorIndex);
+                if (score == null)
+                {
+                    return;
+                }
+
+                NoteDataList rawList = NotesManager.Instance(monitorIndex).getReader().GetNoteList();
+                List<NoteData> notes = new List<NoteData>();
+                foreach (NoteData n in rawList)
+                {
+                    notes.Add(n);
+                }
+
+                long A = score.ScoreTotal._allPerfectScore;
+                long B = score.ScoreTotal._breakBonusScore;
+
+                List<int> tapTouchIdx = new List<int>();
+                List<int> holdIdx = new List<int>();
+                List<int> slideIdx = new List<int>();
+                List<int> breakIdx = new List<int>();
+                for (int i = 0; i < notes.Count; i++)
+                {
+                    NoteScore.EScoreType st = GamePlayManager.NoteType2ScoreType(notes[i].type.getEnum());
+                    int idx = notes[i].indexNote;
+                    switch (st)
+                    {
+                        case NoteScore.EScoreType.Hold: holdIdx.Add(idx); break;
+                        case NoteScore.EScoreType.Slide: slideIdx.Add(idx); break;
+                        case NoteScore.EScoreType.Break: breakIdx.Add(idx); break;
+                        default: tapTouchIdx.Add(idx); break;
+                    }
+                }
+
+                long R = (long)Math.Round((double)Target * 10000.0, MidpointRounding.AwayFromZero);
+                long maxStored = (B > 0) ? 1010000L : 1000000L;
+                if (R > maxStored) R = maxStored;
+                if (R < 0) R = 0;
+
+                long scoreUnits;
+                int breakPerfect;
+                if (!Solve(R, A, B, breakIdx.Count, tapTouchIdx.Count, holdIdx.Count, slideIdx.Count,
+                           out scoreUnits, out breakPerfect))
+                {
+                    MelonLogger.Warning($"[ScoreTransfer] fullPlay 无法精确凑出 {Target}%，本曲退化为全 Perfect");
+                    return;
+                }
+
+                for (int k = 0; k < breakPerfect && k < breakIdx.Count; k++)
+                {
+                    _plan[breakIdx[k]] = NoteJudge.ETiming.FastPerfect;
+                }
+
+                long q = scoreUnits / 2;
+                int s3 = (int)Math.Min(slideIdx.Count, q / 3);
+                long rem = q - 3L * s3;
+                int s2 = (int)Math.Min(holdIdx.Count, rem / 2);
+                long s1 = rem - 2L * s2;
+                for (int i = 0; i < s3; i++) _plan[slideIdx[i]] = NoteJudge.ETiming.FastGreat;
+                for (int i = 0; i < s2; i++) _plan[holdIdx[i]] = NoteJudge.ETiming.FastGreat;
+                long placed = 0;
+                for (int i = 0; i < tapTouchIdx.Count && placed < s1; i++, placed++) _plan[tapTouchIdx[i]] = NoteJudge.ETiming.FastGreat;
             }
             catch (Exception e)
             {
