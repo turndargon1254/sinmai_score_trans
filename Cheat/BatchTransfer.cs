@@ -39,6 +39,7 @@ namespace SinmaiAssist.Cheat
         private static bool _sessionEnded;
         private static bool _sessionPlayedAnyTrack;
         private static TransferItem _lastPlayedItem;
+        private static float _loginRealtime;
         private static float _lastLogTime;
 
         private static void LogSnapshot(string tag)
@@ -218,6 +219,7 @@ namespace SinmaiAssist.Cheat
             Message = "LoggingIn";
             _sessionPlayedAnyTrack = false;
             _lastPlayedItem = null;
+            _loginRealtime = Time.realtimeSinceStartup;
             MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Login（等待进入选歌/登录界面）");
 
             yield return EnsureMusicSelect(enterTimeout);
@@ -227,34 +229,41 @@ namespace SinmaiAssist.Cheat
                 State = "LoggedIn";
                 Message = "LoggedIn";
                 MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] Login success");
-                yield return WaitAfterLogin(session);
+                yield return WarmUpSession(session);
             }
         }
 
         /// <summary>
-        /// 登录后停留一段时间再开始转移。官方服务器在登录后约 1 分钟才接收上传（UpsertUserAll），
-        /// 太早结算会被静默丢弃；这里默认停留 loginWaitSeconds 秒。
+        /// 保证从登录到登出(结算/上传)至少持续 MinSessionSeconds。
+        /// 服务器只在 UserLogoutApi 时才接收上传，session 太短会导致成绩被静默丢弃。
         /// </summary>
-        private static IEnumerator WaitAfterLogin(int session)
+        private static IEnumerator WarmUpSession(int session)
         {
-            float seconds = Math.Max(0f, SinmaiAssist.config.ScoreTransfer.LoginWaitSeconds);
-            if (seconds <= 0f)
+            float min = Math.Max(0f, SinmaiAssist.config.ScoreTransfer.MinSessionSeconds);
+            if (min <= 0f)
             {
                 yield break;
             }
 
-            State = "LoginWait";
-            Message = "LoginWait";
-            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] 登录后停留 {seconds:0}s 再开始（服务器登录约1分钟后才接收上传）");
+            float elapsed = Time.realtimeSinceStartup - _loginRealtime;
+            float remaining = min - elapsed;
+            if (remaining <= 0f)
+            {
+                yield break;
+            }
+
+            State = "SessionWarmup";
+            Message = "SessionWarmup";
+            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] 登录后停留 {remaining:0}s（保证登录→登出 ≥ {min:0}s）");
 
             float t = 0f;
-            float nextLog = 30f;
-            while (t < seconds && !_stopRequested)
+            float nextLog = 15f;
+            while (t < remaining && !_stopRequested)
             {
                 if (t >= nextLog)
                 {
-                    MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] 登录等待中… 剩余 {seconds - t:0}s");
-                    nextLog += 30f;
+                    MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] 登录等待中… 剩余 {remaining - t:0}s");
+                    nextLog += 15f;
                 }
                 t += Time.deltaTime;
                 yield return null;

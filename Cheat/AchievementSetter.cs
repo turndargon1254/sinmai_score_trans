@@ -6,6 +6,7 @@ using Monitor;
 using Process;
 using System;
 using System.Reflection;
+using UnityEngine;
 using Type = System.Type;
 
 namespace SinmaiAssist.Cheat
@@ -33,6 +34,9 @@ namespace SinmaiAssist.Cheat
         public static bool Pending = false;
         public static decimal Target = 0m;
 
+        // 进入谱面后先正常游玩多久(秒)再强制结算。太短服务器会判定不合法而丢弃成绩。
+        private static float _playStartTime = -1f;
+
         [HarmonyPostfix]
         [HarmonyPatch(typeof(GameProcess), "OnUpdate")]
         public static void Skip(GameProcess __instance)
@@ -44,11 +48,28 @@ namespace SinmaiAssist.Cheat
                     .GetField("_sequence", BindingFlags.NonPublic | BindingFlags.Instance)
                     .GetValue(__instance);
 
-                if (sequence < GameSequence.Play || sequence >= GameSequence.Release || GameManager.IsNoteCheckMode || !Pending)
+                if (sequence >= GameSequence.Release)
+                {
+                    _playStartTime = -1f;
+                    return;
+                }
+                if (sequence < GameSequence.Play || GameManager.IsNoteCheckMode || !Pending)
                 {
                     return;
                 }
 
+                // 进入谱面后先正常游玩 PlayWaitSeconds 秒，再强制结算（时长太短服务器会丢弃成绩）。
+                if (_playStartTime < 0f)
+                {
+                    _playStartTime = Time.realtimeSinceStartup;
+                }
+                float playWait = Math.Max(0f, SinmaiAssist.config.ScoreTransfer.PlayWaitSeconds);
+                if (playWait > 0f && Time.realtimeSinceStartup - _playStartTime < playWait)
+                {
+                    return;
+                }
+
+                _playStartTime = -1f;
                 Pending = false;
 
                 var updateSubbMonitorData = typeof(GameProcess).GetMethod("UpdateSubbMonitorData", BindingFlags.NonPublic | BindingFlags.Instance);

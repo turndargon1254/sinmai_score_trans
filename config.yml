@@ -9,8 +9,9 @@
   uploadTimeoutSeconds: 60
   logoutTimeoutSeconds: 60
   loginTimeoutSeconds: 120
-  loginWaitSeconds: 0
-  songWaitSeconds: 30
+  minSessionSeconds: 120
+  songWaitSeconds: 0
+  playWaitSeconds: 60
 dummyLogin:
   enable: true
   defaultUserId: 1

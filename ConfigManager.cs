@@ -94,8 +94,9 @@ namespace SinmaiAssist
             "  uploadTimeoutSeconds: 60 # 等待成绩提交(UpsertUserAll)成功的超时(秒)\r\n" +
             "  logoutTimeoutSeconds: 60 # 等待登出(UserLogout)成功的超时(秒)\r\n" +
             "  loginTimeoutSeconds: 120 # 等待回到可登录界面的超时(秒)\r\n" +
-            "  loginWaitSeconds: 0 # 每次登录后停留多少秒再开始转移（一般用 songWaitSeconds 即可，此项用于额外等待）\r\n" +
-            "  songWaitSeconds: 30 # 每首开始前等待多少秒（服务器需要间隔，建议≥30）\r\n" +
+            "  minSessionSeconds: 120 # 保证从登录到登出(结算/上传)至少持续这么久，不够会先停留（服务器只在登出时接收上传）\r\n" +
+            "  songWaitSeconds: 0 # 每首开始前额外等待多少秒（一般不需要，MinSession 已兜底）\r\n" +
+            "  playWaitSeconds: 60 # 进入谱面后先正常游玩多久再强制结算（太短服务器会拒收，建议≥60）\r\n" +
             "dummyLogin: # 自动登录(刷卡)\r\n" +
             "  enable: true # 是否启用\r\n" +
             "  defaultUserId: 1 # 默认用户ID\r\n";
@@ -114,8 +115,9 @@ namespace SinmaiAssist
                 case "uploadTimeoutSeconds": cfg.UploadTimeoutSeconds = ParseFloat(value, cfg.UploadTimeoutSeconds); break;
                 case "logoutTimeoutSeconds": cfg.LogoutTimeoutSeconds = ParseFloat(value, cfg.LogoutTimeoutSeconds); break;
                 case "loginTimeoutSeconds": cfg.LoginTimeoutSeconds = ParseFloat(value, cfg.LoginTimeoutSeconds); break;
-                case "loginWaitSeconds": cfg.LoginWaitSeconds = ParseFloat(value, cfg.LoginWaitSeconds); break;
+                case "minSessionSeconds": cfg.MinSessionSeconds = ParseFloat(value, cfg.MinSessionSeconds); break;
                 case "songWaitSeconds": cfg.SongWaitSeconds = ParseFloat(value, cfg.SongWaitSeconds); break;
+                case "playWaitSeconds": cfg.PlayWaitSeconds = ParseFloat(value, cfg.PlayWaitSeconds); break;
             }
         }
 
@@ -165,8 +167,9 @@ namespace SinmaiAssist
         public float UploadTimeoutSeconds { get; set; } = 60f;
         public float LogoutTimeoutSeconds { get; set; } = 60f;
         public float LoginTimeoutSeconds { get; set; } = 120f;
-        public float LoginWaitSeconds { get; set; } = 0f;
-        public float SongWaitSeconds { get; set; } = 30f;
+        public float MinSessionSeconds { get; set; } = 120f;
+        public float SongWaitSeconds { get; set; } = 0f;
+        public float PlayWaitSeconds { get; set; } = 60f;
     }
 
     public class DummyLoginConfig

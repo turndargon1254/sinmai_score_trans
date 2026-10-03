@@ -9,8 +9,9 @@
   uploadTimeoutSeconds: 60 # 等待成绩提交(UpsertUserAll)成功的超时时间(秒)
   logoutTimeoutSeconds: 60 # 等待登出(UserLogout)成功的超时时间(秒)
   loginTimeoutSeconds: 120 # 等待回到可登录界面的超时时间(秒)
-  loginWaitSeconds: 0 # 每次登录后额外等待(秒)，一般用 songWaitSeconds 即可
-  songWaitSeconds: 30 # 每首开始前等待多少秒（服务器需要间隔，建议≥30）
+  minSessionSeconds: 120 # 保证登录→登出(结算/上传)至少持续这么久(秒)
+  songWaitSeconds: 0 # 每首开始前额外等待(秒)，一般不需要
+  playWaitSeconds: 60 # 进入谱面后先正常游玩多久再强制结算(秒)，太短服务器会拒收，建议≥60
 dummyLogin: # 自动登录(刷卡)
   enable: true # 是否启用
   defaultUserId: 1 # 默认用户ID
