@@ -261,8 +261,39 @@ namespace SinmaiAssist.Cheat
             }
         }
 
+        /// <summary>
+        /// 每首开始前的等待间隔。官方服务器需要在两首之间留出一定间隔，否则成绩可能被丢弃。
+        /// </summary>
+        private static IEnumerator WaitBeforeSong(int session, TransferItem item)
+        {
+            float seconds = Math.Max(0f, SinmaiAssist.config.ScoreTransfer.SongWaitSeconds);
+            if (seconds <= 0f)
+            {
+                yield break;
+            }
+
+            State = "WaitingSong";
+            Message = $"WaitingSong {item.musicId}";
+            MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] 开始前等待 {seconds:0}s（曲目 {item.musicId}）");
+
+            float t = 0f;
+            float nextLog = 10f;
+            while (t < seconds && !_stopRequested)
+            {
+                if (t >= nextLog)
+                {
+                    MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] 等待中… 剩余 {seconds - t:0}s");
+                    nextLog += 10f;
+                }
+                t += Time.deltaTime;
+                yield return null;
+            }
+        }
+
         private static IEnumerator ProcessItem(TransferItem item, int session, int indexInSession, int batchSize, float enterTimeout, float trackTimeout)
         {
+            yield return WaitBeforeSong(session, item);
+
             State = "EnteringPlay";
             Message = $"EnteringPlay {item.musicId}";
             MelonLogger.Msg($"[ScoreTransfer] [Batch {session}] [{indexInSession}/{batchSize}] Enter song {item.musicId} (difficulty {item.difficulty}, target {item.targetAchievement:0.0000}%)");
