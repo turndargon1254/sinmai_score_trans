@@ -69,6 +69,19 @@ namespace SinmaiAssist.Cheat
                 if (sequence >= GameSequence.Release)
                 {
                     _playStartTime = -1f;
+                    if (_planActive && !_resultLogged)
+                    {
+                        _resultLogged = true;
+                        try
+                        {
+                            GameScoreList sc = Singleton<GamePlayManager>.Instance.GetGameScore(0);
+                            if (sc != null)
+                            {
+                                MelonLogger.Msg($"[ScoreTransfer] 本曲实际达成率={sc.GetAchivement()} (目标 {Target * 10m})");
+                            }
+                        }
+                        catch { }
+                    }
                     return;
                 }
 
@@ -177,20 +190,20 @@ namespace SinmaiAssist.Cheat
         /// </summary>
         private static int _setResultCalls;
         private static int _setResultOverrides;
+        private static bool _resultLogged;
 
         [HarmonyPrefix]
         [HarmonyPatch(typeof(GameScoreList), "SetResult")]
-        public static void OverrideSetResult(object[] __args)
+        public static void OverrideSetResult(int index, NoteScore.EScoreType scoreType, ref NoteJudge.ETiming timing)
         {
-            if (!_planActive || __args == null || __args.Length < 3)
+            if (!_planActive)
             {
                 return;
             }
-            int index = (int)__args[0];
             _setResultCalls++;
             if (_plan.TryGetValue(index, out NoteJudge.ETiming planned))
             {
-                __args[2] = planned;
+                timing = planned;
                 _setResultOverrides++;
                 if (_setResultOverrides == 1)
                 {
@@ -213,6 +226,7 @@ namespace SinmaiAssist.Cheat
                 _plan.Clear();
                 _setResultCalls = 0;
                 _setResultOverrides = 0;
+                _resultLogged = false;
                 int monitorIndex = -1;
                 for (int i = 0; i < 2; i++)
                 {
