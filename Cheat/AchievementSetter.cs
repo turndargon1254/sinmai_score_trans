@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using MAI2.Util;
 using Manager;
 using MelonLoader;
@@ -208,8 +208,7 @@ namespace SinmaiAssist.Cheat
         {
             if (_planActive)
             {
-                __instance.JudgeResult = PlannedFor(__instance.NoteIndex);
-                LogOverrideOnce(__instance.NoteIndex);
+                ApplyPlanToNote(__instance);
             }
         }
 
@@ -219,8 +218,7 @@ namespace SinmaiAssist.Cheat
         {
             if (_planActive)
             {
-                __instance.JudgeResult = PlannedFor(__instance.NoteIndex);
-                LogOverrideOnce(__instance.NoteIndex);
+                ApplyPlanToNote(__instance);
             }
         }
 
@@ -230,8 +228,7 @@ namespace SinmaiAssist.Cheat
         {
             if (_planActive)
             {
-                __instance.JudgeResult = PlannedFor(__instance.NoteIndex);
-                LogOverrideOnce(__instance.NoteIndex);
+                ApplyPlanToNote(__instance);
             }
         }
 
@@ -241,8 +238,7 @@ namespace SinmaiAssist.Cheat
         {
             if (_planActive)
             {
-                __instance.JudgeResult = PlannedFor(__instance.NoteIndex);
-                LogOverrideOnce(__instance.NoteIndex);
+                ApplyPlanToNote(__instance);
             }
         }
 
@@ -252,17 +248,24 @@ namespace SinmaiAssist.Cheat
         {
             if (_planActive)
             {
-                __instance.JudgeResult = PlannedFor(__instance.NoteIndex);
-                LogOverrideOnce(__instance.NoteIndex);
+                ApplyPlanToNote(__instance);
             }
         }
 
-        private static void LogOverrideOnce(int noteIndex)
+        private static void ApplyPlanToNote(object note)
         {
+            if (!_planActive || note == null)
+            {
+                return;
+            }
+            Traverse tr = Traverse.Create(note);
+            int idx = tr.Field<int>("NoteIndex").Value;
+            NoteJudge.ETiming planned = PlannedFor(idx);
+            tr.Field<NoteJudge.ETiming>("JudgeResult").Value = planned;
             _overrideCount++;
             if (_overrideCount == 1)
             {
-                MelonLogger.Msg($"[ScoreTransfer] AutoJudge 覆盖生效: index={noteIndex} (plan={_plan.Count})");
+                MelonLogger.Msg($"[ScoreTransfer] AutoJudge 覆盖生效: index={idx} {planned} (plan={_plan.Count})");
             }
         }
 
