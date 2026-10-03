@@ -104,11 +104,11 @@ namespace SinmaiAssist.Cheat
                     {
                         GameManager.AutoPlay = GameManager.AutoPlayMode.Critical;
                         BuildPlan(__instance);
-                        ForcedAchievement = Target * 10m;
-                        OverrideActive = true;
                         _planActive = true;
                         Pending = false;
-                        MelonLogger.Msg($"[ScoreTransfer] fullPlay: 自动完整演奏，逐键命中 {Target}%");
+                        // 注意：fullPlay 下不覆盖 GetAchivement，让达成率由真实判定算出，
+                        // 避免出现“全 Critical 却报 100.5x%”这种前后不一致而被服务器丢弃。
+                        MelonLogger.Msg($"[ScoreTransfer] fullPlay: 自动完整演奏，plan={_plan.Count} 目标 {Target}%");
                     }
                     return;
                 }
@@ -203,13 +203,30 @@ namespace SinmaiAssist.Cheat
         /// 这里按预先算好的计划改写该音符的判定，从而精确命中目标达成率，
         /// 同时保持整首真实时长/Note 进度（playlog 看起来就是一把正常游玩）。
         /// </summary>
+        private static int _setResultCalls;
+        private static int _setResultOverrides;
+
         [HarmonyPrefix]
         [HarmonyPatch(typeof(GameScoreList), "SetResult")]
         public static void OverrideSetResult(int index, NoteScore.EScoreType scoreType, ref NoteJudge.ETiming timing)
         {
-            if (_planActive && _plan.TryGetValue(index, out NoteJudge.ETiming planned))
+            if (!_planActive)
+            {
+                return;
+            }
+            _setResultCalls++;
+            if (_plan.TryGetValue(index, out NoteJudge.ETiming planned))
             {
                 timing = planned;
+                _setResultOverrides++;
+                if (_setResultOverrides == 1)
+                {
+                    MelonLogger.Msg($"[ScoreTransfer] SetResult 覆盖生效: index={index} {timing} (plan={_plan.Count})");
+                }
+            }
+            else if (_setResultCalls == 1)
+            {
+                MelonLogger.Warning($"[ScoreTransfer] SetResult 首次调用 index={index} 不在 plan（plan={_plan.Count}）");
             }
         }
 
@@ -221,6 +238,8 @@ namespace SinmaiAssist.Cheat
             try
             {
                 _plan.Clear();
+                _setResultCalls = 0;
+                _setResultOverrides = 0;
                 int monitorIndex = -1;
                 for (int i = 0; i < 2; i++)
                 {
@@ -295,6 +314,14 @@ namespace SinmaiAssist.Cheat
                 for (int i = 0; i < s2; i++) _plan[holdIdx[i]] = NoteJudge.ETiming.FastGreat;
                 long placed = 0;
                 for (int i = 0; i < tapTouchIdx.Count && placed < s1; i++, placed++) _plan[tapTouchIdx[i]] = NoteJudge.ETiming.FastGreat;
+
+                int minIdx = int.MaxValue, maxIdx = int.MinValue;
+                foreach (int key in _plan.Keys)
+                {
+                    if (key < minIdx) minIdx = key;
+                    if (key > maxIdx) maxIdx = key;
+                }
+                MelonLogger.Msg($"[ScoreTransfer] plan 构建: notes={notes.Count} overrides={_plan.Count} idx=[{minIdx},{maxIdx}] A={A} B={B} R={R}");
             }
             catch (Exception e)
             {
