@@ -325,11 +325,17 @@ namespace SinmaiAssist.Cheat
                     }
                 }
 
-                // 默认判定：非断键 = 小P(FastPerfect)，断键 = Critical。
-                // 非断键 Perfect 与 Critical 对完成率同分，用小P可显著降低 DX score；断键默认 Critical。
+                // 默认判定：
+                //   Tap/Touch/Hold = 小P(FastPerfect)  —— 与 Critical 对完成率同分，可降低 DX score；
+                //   Slide = Critical（Slide 没有小P，只有 Critical/Great/Good/Miss）；
+                //   Break = Critical（断键大小P会影响完成率，必须默认 Critical）。
                 for (int i = 0; i < notes.Count; i++)
                 {
                     _plan[notes[i].indexNote] = NoteJudge.ETiming.FastPerfect;
+                }
+                for (int i = 0; i < slideIdx.Count; i++)
+                {
+                    _plan[slideIdx[i]] = NoteJudge.ETiming.Critical;
                 }
                 for (int i = 0; i < breakIdx.Count; i++)
                 {
