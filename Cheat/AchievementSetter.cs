@@ -349,16 +349,21 @@ namespace SinmaiAssist.Cheat
 
                 long scoreUnits;
                 int breakPerfect;
+                int breakGreat;
                 if (!Solve(R, A, B, breakIdx.Count, tapTouchIdx.Count, holdIdx.Count, slideIdx.Count,
-                           out scoreUnits, out breakPerfect))
+                           out scoreUnits, out breakPerfect, out breakGreat))
                 {
                     MelonLogger.Warning($"[ScoreTransfer] fullPlay 无法精确凑出 {Target}%，本曲退化为全 Perfect");
                     return;
                 }
 
-                for (int k = 0; k < breakPerfect && k < breakIdx.Count; k++)
+                for (int k = 0; k < breakGreat && k < breakIdx.Count; k++)
                 {
-                    _plan[breakIdx[k]] = NoteJudge.ETiming.FastPerfect;
+                    _plan[breakIdx[k]] = NoteJudge.ETiming.FastGreat;
+                }
+                for (int k = 0; k < breakPerfect && breakGreat + k < breakIdx.Count; k++)
+                {
+                    _plan[breakIdx[breakGreat + k]] = NoteJudge.ETiming.FastPerfect;
                 }
 
                 long q = scoreUnits / 2;
@@ -444,13 +449,18 @@ namespace SinmaiAssist.Cheat
                 }
 
                 long scoreUnits;   // Δs / 50
-                int breakPerfect;  // 需要设为 Perfect(而非 Critical) 的断键数量，Δb = 25 * 该值
+                int breakPerfect;  // 设为 Perfect 的断键数量（Δb=25/个）
+                int breakGreat;    // 设为 FastGreat 的断键数量（扣500分, Δb=60/个）
                 if (Solve(R, A, B, breakIdx.Count, tapIdx.Count + touchIdx.Count, holdIdx.Count, slideIdx.Count,
-                          out scoreUnits, out breakPerfect))
+                          out scoreUnits, out breakPerfect, out breakGreat))
                 {
-                    for (int k = 0; k < breakPerfect && k < breakIdx.Count; k++)
+                    for (int k = 0; k < breakGreat && k < breakIdx.Count; k++)
                     {
-                        timing[breakIdx[k]] = NoteJudge.ETiming.FastPerfect;
+                        timing[breakIdx[k]] = NoteJudge.ETiming.FastGreat;
+                    }
+                    for (int k = 0; k < breakPerfect && breakGreat + k < breakIdx.Count; k++)
+                    {
+                        timing[breakIdx[breakGreat + k]] = NoteJudge.ETiming.FastPerfect;
                     }
                     AssignScorePenalty(timing, slideIdx, holdIdx, tapIdx, touchIdx, scoreUnits);
                 }
@@ -477,10 +487,11 @@ namespace SinmaiAssist.Cheat
         /// 只用偶数 scoreUnits（即 Δs 为 100 的倍数），可由 Great 组合精确实现。
         /// </summary>
         private static bool Solve(long R, long A, long B, int nBreak, int nTapTouch, int nHold, int nSlide,
-                                  out long scoreUnits, out int breakPerfect)
+                                  out long scoreUnits, out int breakPerfect, out int breakGreat)
         {
             scoreUnits = 0;
             breakPerfect = 0;
+            breakGreat = 0;
             if (A <= 0)
             {
                 return false;
@@ -495,7 +506,7 @@ namespace SinmaiAssist.Cheat
                 double nbBestWin = double.MaxValue, nbBestAny = double.MaxValue;
                 long nbPWin = 0, nbPAny = 0;
                 bool nbOkWin = false;
-                for (long p = Math.Max(0, p0 - 300); p <= p0 + 300; p++)
+                for (long p = Math.Max(0, p0 - 400); p <= p0 + 400; p++)
                 {
                     if ((p & 1L) != 0) continue;
                     if (!CanRealizeGreats(p, nTapTouch, nHold, nSlide)) continue;
@@ -517,39 +528,48 @@ namespace SinmaiAssist.Cheat
                 return scoreUnits > 0;
             }
 
-            double sStep = 1e6 * 50.0 / A;   // 每 scoreUnit(50分)
+            double sStep = 1e6 * 50.0 / A;   // 每 scoreUnit(50分)，由非断键 Great 实现
             double bStep = 1e4 * 25.0 / B;   // 每个断键 Perfect(Δb=25)
+            double gStep = 1e6 * 500.0 / A + 1e4 * 60.0 / B; // 每个断键 FastGreat(扣500分, Δb=60)
             double D = 1010000.0 - R;
             double bestWin = double.MaxValue, bestAny = double.MaxValue;
             long pWin = 0, pAny = 0;
-            int jWin = 0, jAny = 0;
+            int jWin = 0, jAny = 0, mWin = 0, mAny = 0;
             bool okWin = false;
-            for (int j = 0; j <= nBreak; j++)
+            int maxM = Math.Min(nBreak, 8);
+            for (int m = 0; m <= maxM; m++)
             {
-                double rem = D - bStep * j;
-                if (rem < -0.5)
+                double remM = D - gStep * m;
+                int remBreaks = nBreak - m;
+                for (int j = 0; j <= remBreaks; j++)
                 {
-                    break;
-                }
-                long p0 = (long)Math.Round(rem / sStep);
-                for (long p = Math.Max(0, p0 - 64); p <= p0 + 64; p++)
-                {
-                    if ((p & 1L) != 0) continue;
-                    if (!CanRealizeGreats(p, nTapTouch, nHold, nSlide)) continue;
-                    double stored = 1010000.0 - (sStep * p + bStep * j);
-                    double err = Math.Abs(stored - (R + 0.25));
-                    if (err < bestAny)
+                    double rem = remM - bStep * j;
+                    if (rem < -0.5)
                     {
-                        bestAny = err;
-                        pAny = p;
-                        jAny = j;
+                        break;
                     }
-                    if (stored >= R && stored < R + 1 && err < bestWin)
+                    long p0 = (long)Math.Round(rem / sStep);
+                    for (long p = Math.Max(0, p0 - 64); p <= p0 + 64; p++)
                     {
-                        bestWin = err;
-                        pWin = p;
-                        jWin = j;
-                        okWin = true;
+                        if ((p & 1L) != 0) continue;
+                        if (!CanRealizeGreats(p, nTapTouch, nHold, nSlide)) continue;
+                        double stored = 1010000.0 - (gStep * m + bStep * j + sStep * p);
+                        double err = Math.Abs(stored - (R + 0.25));
+                        if (err < bestAny)
+                        {
+                            bestAny = err;
+                            pAny = p;
+                            jAny = j;
+                            mAny = m;
+                        }
+                        if (stored >= R && stored < R + 1 && err < bestWin)
+                        {
+                            bestWin = err;
+                            pWin = p;
+                            jWin = j;
+                            mWin = m;
+                            okWin = true;
+                        }
                     }
                 }
             }
@@ -557,10 +577,12 @@ namespace SinmaiAssist.Cheat
             {
                 scoreUnits = pWin;
                 breakPerfect = jWin;
+                breakGreat = mWin;
                 return true;
             }
             scoreUnits = pAny;
             breakPerfect = jAny;
+            breakGreat = mAny;
             return bestAny < double.MaxValue;
         }
 
