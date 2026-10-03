@@ -4,7 +4,7 @@
   webEnable: true
   batchSize: 4
   enterTimeoutSeconds: 120
-  trackTimeoutSeconds: 120
+  trackTimeoutSeconds: 300
   fillRemainingTracks: true
   uploadTimeoutSeconds: 60
   logoutTimeoutSeconds: 60

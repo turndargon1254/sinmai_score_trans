@@ -89,7 +89,7 @@ namespace SinmaiAssist
             "  webEnable: true # 是否启动网页服务(若启动后游戏断网，请设为 false，可能是防火墙拦截)\r\n" +
             "  batchSize: 4 # 每个 Session 最多转移曲目数\r\n" +
             "  enterTimeoutSeconds: 120 # 等待进入选歌界面的超时(秒)\r\n" +
-            "  trackTimeoutSeconds: 120 # 等待单曲完成的超时(秒)\r\n" +
+            "  trackTimeoutSeconds: 300 # 等待单曲完成的超时(秒)，fullPlay 完整演奏建议≥300\r\n" +
             "  fillRemainingTracks: true # 最后一首后若本局还有剩余 Track，重复最后一首直到结算\r\n" +
             "  uploadTimeoutSeconds: 60 # 等待成绩提交(UpsertUserAll)成功的超时(秒)\r\n" +
             "  logoutTimeoutSeconds: 60 # 等待登出(UserLogout)成功的超时(秒)\r\n" +
@@ -166,7 +166,7 @@ namespace SinmaiAssist
         public bool WebEnable { get; set; } = true;
         public int BatchSize { get; set; } = 4;
         public float EnterTimeoutSeconds { get; set; } = 120f;
-        public float TrackTimeoutSeconds { get; set; } = 120f;
+        public float TrackTimeoutSeconds { get; set; } = 300f;
         public bool FillRemainingTracks { get; set; } = true;
         public float UploadTimeoutSeconds { get; set; } = 60f;
         public float LogoutTimeoutSeconds { get; set; } = 60f;
