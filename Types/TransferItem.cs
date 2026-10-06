@@ -8,6 +8,9 @@ public class TransferItem
     public int difficulty;
     public decimal targetAchievement;
 
+    // 状态：0=AP+ 1=AP 2=FC+ 3=FC；-1=未指定（按可达判定自由生成）
+    public int comboStatus = -1;
+
     // 运行时填充
     public string name;
     public uint originalAchievement;

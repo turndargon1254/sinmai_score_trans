@@ -32,6 +32,7 @@ namespace SinmaiAssist.Cheat
         private static int _pendingScoreType;
         private static int _pendingDifficulty;
         private static decimal _pendingAchievement;
+        private static int _pendingComboStatus = -1;
         private static bool _inProgress;
 
         public static bool IsBusy
@@ -41,6 +42,12 @@ namespace SinmaiAssist.Cheat
 
         /// <summary>由 HTTP 线程调用，投递一次转移请求（线程安全）。</summary>
         public static bool Request(int musicId, int scoreType, int difficulty, decimal achievement, out string error)
+        {
+            return Request(musicId, scoreType, difficulty, achievement, -1, out error);
+        }
+
+        /// <summary>带“状态(0=AP+/1=AP/2=FC+/3=FC, -1=不限)”的转移请求。</summary>
+        public static bool Request(int musicId, int scoreType, int difficulty, decimal achievement, int comboStatus, out string error)
         {
             if (musicId <= 0)
             {
@@ -69,6 +76,7 @@ namespace SinmaiAssist.Cheat
                 _pendingScoreType = scoreType;
                 _pendingDifficulty = difficulty;
                 _pendingAchievement = achievement;
+                _pendingComboStatus = comboStatus;
                 _hasPending = true;
                 State = "Queued";
                 Message = "";
@@ -91,6 +99,7 @@ namespace SinmaiAssist.Cheat
             int scoreType;
             int difficulty;
             decimal achievement;
+            int comboStatus;
             lock (SyncRoot)
             {
                 if (!_hasPending)
@@ -103,11 +112,12 @@ namespace SinmaiAssist.Cheat
                 scoreType = _pendingScoreType;
                 difficulty = _pendingDifficulty;
                 achievement = _pendingAchievement;
+                comboStatus = _pendingComboStatus;
             }
 
             try
             {
-                MelonCoroutines.Start(RunTransfer(musicId, scoreType, difficulty, achievement));
+                MelonCoroutines.Start(RunTransfer(musicId, scoreType, difficulty, achievement, comboStatus));
             }
             catch (Exception e)
             {
@@ -118,7 +128,7 @@ namespace SinmaiAssist.Cheat
             }
         }
 
-        private static IEnumerator RunTransfer(int musicId, int scoreType, int difficulty, decimal achievement)
+        private static IEnumerator RunTransfer(int musicId, int scoreType, int difficulty, decimal achievement, int comboStatus)
         {
             try
             {
@@ -157,6 +167,8 @@ namespace SinmaiAssist.Cheat
 
                 // 交给完成度写入模块
                 AchievementSetter.Target = achievement;
+                // 状态列：0=AP+ 1=AP 2=FC+ 3=FC -> 游戏 PlayComboflagID (4/3/2/1)；未指定=-1
+                AchievementSetter.DesiredCombo = comboStatus < 0 ? -1 : (4 - comboStatus);
                 AchievementSetter.Pending = true;
 
                 CurrentMusicId = musicId;

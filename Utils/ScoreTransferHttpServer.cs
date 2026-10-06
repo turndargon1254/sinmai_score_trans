@@ -203,6 +203,23 @@ namespace SinmaiAssist.Utils
             return !string.IsNullOrEmpty(value) && value.Equals(expected, StringComparison.OrdinalIgnoreCase);
         }
 
+        private static int ParseDifficulty(string s)
+        {
+            if (int.TryParse(s, out int n))
+            {
+                return n;
+            }
+            switch (s.Trim().ToUpperInvariant())
+            {
+                case "BASIC": case "BSC": return 0;
+                case "ADVANCED": case "ADV": return 1;
+                case "EXPERT": case "EXP": return 2;
+                case "MASTER": case "MAS": return 3;
+                case "RE:MASTER": case "REMASTER": case "REMAS": return 4;
+                default: return 3;
+            }
+        }
+
         private static List<TransferItem> ParseItems(string body, out int batchSize, out string error)
         {
             batchSize = 0;
@@ -280,21 +297,43 @@ namespace SinmaiAssist.Utils
                         continue;
                     }
                     int musicId;
-                    int difficulty;
                     decimal achievement;
                     if (!int.TryParse(parts[0], out musicId) ||
-                        !int.TryParse(parts[1], out difficulty) ||
                         !decimal.TryParse(parts[2], NumberStyles.Number, CultureInfo.InvariantCulture, out achievement))
                     {
                         continue;
+                    }
+                    int difficulty = ParseDifficulty(parts[1]);
+                    // 第4列 谱面：sd=1 / dx=0（也支持 sd/dx 文本）；缺省按 musicId>=10000 推断
+                    int scoreType;
+                    if (parts.Length >= 4)
+                    {
+                        string c = parts[3].Trim();
+                        if (c.Equals("sd", StringComparison.OrdinalIgnoreCase)) scoreType = 0;
+                        else if (c.Equals("dx", StringComparison.OrdinalIgnoreCase)) scoreType = 1;
+                        else if (int.TryParse(c, out int ch)) scoreType = ch == 1 ? 0 : 1;
+                        else scoreType = musicId >= 10000 ? 1 : 0;
+                    }
+                    else
+                    {
+                        scoreType = musicId >= 10000 ? 1 : 0;
+                    }
+                    // 第5列 状态：0=AP+ 1=AP 2=FC+ 3=FC；非数字则当作名称
+                    int comboStatus = -1;
+                    string name = "";
+                    if (parts.Length >= 5)
+                    {
+                        if (int.TryParse(parts[4], out int cs) && cs >= 0 && cs <= 3) comboStatus = cs;
+                        else name = parts[4];
                     }
                     TransferItem item = new TransferItem
                     {
                         musicId = musicId,
                         difficulty = difficulty,
                         targetAchievement = achievement,
-                        scoreType = parts.Length >= 4 && int.TryParse(parts[3], out int st) ? st : (musicId >= 10000 ? 1 : 0),
-                        name = parts.Length >= 5 ? parts[4] : ""
+                        scoreType = scoreType,
+                        comboStatus = comboStatus,
+                        name = name
                     };
                     items.Add(item);
                 }

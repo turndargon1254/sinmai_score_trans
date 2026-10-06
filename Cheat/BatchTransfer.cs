@@ -398,7 +398,7 @@ namespace SinmaiAssist.Cheat
             }
 
             string error;
-            if (!ScoreTransfer.Request(item.musicId, item.scoreType, item.difficulty, item.targetAchievement, out error))
+            if (!ScoreTransfer.Request(item.musicId, item.scoreType, item.difficulty, item.targetAchievement, item.comboStatus, out error))
             {
                 item.MarkFailed(error);
                 yield break;
@@ -543,6 +543,7 @@ namespace SinmaiAssist.Cheat
                 scoreType = src.scoreType,
                 difficulty = src.difficulty,
                 targetAchievement = src.targetAchievement,
+                comboStatus = src.comboStatus,
                 name = string.IsNullOrEmpty(src.name) ? "" : src.name + "(" + suffix + ")",
                 batchIndex = src.batchIndex
             };

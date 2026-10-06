@@ -34,6 +34,9 @@ namespace SinmaiAssist.Cheat
 
         public static bool Pending = false;
         public static decimal Target = 0m;
+        // 期望的组合状态（游戏 PlayComboflagID：4=AP+ 3=AP 2=FC+ 1=FC，-1=不限）
+        public static int DesiredCombo = -1;
+        private static bool _requireGood;
 
         // 进入谱面后先正常游玩多久(秒)再强制结算。太短服务器会判定不合法而丢弃成绩。
         private static float _playStartTime = -1f;
@@ -342,6 +345,34 @@ namespace SinmaiAssist.Cheat
                     _plan[breakIdx[i]] = NoteJudge.ETiming.Critical;
                 }
 
+                long Rbase = (long)Math.Round((double)Target * 10000.0, MidpointRounding.AwayFromZero);
+                long maxBase = (B > 0) ? 1010000L : 1000000L;
+                if (Rbase > maxBase) Rbase = maxBase;
+                if (Rbase < 0) Rbase = 0;
+
+                if (DesiredCombo == 4)
+                {
+                    // AP+：全 Critical
+                    for (int i = 0; i < notes.Count; i++) _plan[notes[i].indexNote] = NoteJudge.ETiming.Critical;
+                    MelonLogger.Msg("[ScoreTransfer] 状态 AP+：全 Critical");
+                    return;
+                }
+                if (DesiredCombo == 3)
+                {
+                    // AP：不产生 Great/Good/Miss（非断键已默认小P，断键默认 Critical），仅用断键 Perfect 微调
+                    if (B > 0)
+                    {
+                        double bStep = 1e4 * 25.0 / B;
+                        long j = (long)Math.Round((1010000.0 - Rbase) / bStep);
+                        if (j < 0) j = 0;
+                        if (j > breakIdx.Count) j = breakIdx.Count;
+                        for (int k = 0; k < j; k++) _plan[breakIdx[k]] = NoteJudge.ETiming.FastPerfect;
+                    }
+                    MelonLogger.Msg("[ScoreTransfer] 状态 AP：不产生 Great/Good");
+                    return;
+                }
+                _requireGood = (DesiredCombo == 1); // FC(Silver) 需要至少一个 Good
+
                 long R = (long)Math.Round((double)Target * 10000.0, MidpointRounding.AwayFromZero);
                 long maxStored = (B > 0) ? 1010000L : 1000000L;
                 if (R > maxStored) R = maxStored;
@@ -366,15 +397,24 @@ namespace SinmaiAssist.Cheat
                     _plan[breakIdx[breakGreat + k]] = NoteJudge.ETiming.FastPerfect;
                 }
 
-                long q = scoreUnits / 2;
-                int s3 = (int)Math.Min(slideIdx.Count, q / 3);
-                long rem = q - 3L * s3;
-                int s2 = (int)Math.Min(holdIdx.Count, rem / 2);
-                long s1 = rem - 2L * s2;
+                long rem = scoreUnits;
+                int goodTaps = 0;
+                if (_requireGood && rem >= 10 && tapTouchIdx.Count >= 2)
+                {
+                    _plan[tapTouchIdx[0]] = NoteJudge.ETiming.FastGood;
+                    _plan[tapTouchIdx[1]] = NoteJudge.ETiming.FastGood;
+                    goodTaps = 2;
+                    rem -= 10;
+                }
+                int s3 = (int)Math.Min(slideIdx.Count, rem / 6);
+                rem -= 6L * s3;
+                int s2 = (int)Math.Min(holdIdx.Count, rem / 4);
+                rem -= 4L * s2;
+                long s1 = rem / 2;
                 for (int i = 0; i < s3; i++) _plan[slideIdx[i]] = NoteJudge.ETiming.FastGreat;
                 for (int i = 0; i < s2; i++) _plan[holdIdx[i]] = NoteJudge.ETiming.FastGreat;
                 long placed = 0;
-                for (int i = 0; i < tapTouchIdx.Count && placed < s1; i++, placed++) _plan[tapTouchIdx[i]] = NoteJudge.ETiming.FastGreat;
+                for (int i = goodTaps; i < tapTouchIdx.Count && placed < s1; i++, placed++) _plan[tapTouchIdx[i]] = NoteJudge.ETiming.FastGreat;
 
                 int minIdx = int.MaxValue, maxIdx = int.MinValue;
                 foreach (int key in _plan.Keys)
@@ -448,6 +488,7 @@ namespace SinmaiAssist.Cheat
                     timing[i] = NoteJudge.ETiming.Critical;
                 }
 
+                _requireGood = (DesiredCombo == 1); // FC(Silver)
                 long scoreUnits;   // Δs / 50
                 int breakPerfect;  // 设为 Perfect 的断键数量（Δb=25/个）
                 int breakGreat;    // 设为 FastGreat 的断键数量（扣500分, Δb=60/个）
@@ -509,7 +550,7 @@ namespace SinmaiAssist.Cheat
                 for (long p = Math.Max(0, p0 - 400); p <= p0 + 400; p++)
                 {
                     if ((p & 1L) != 0) continue;
-                    if (!CanRealizeGreats(p, nTapTouch, nHold, nSlide)) continue;
+                    if (!CanRealizePenalty(p, nTapTouch, nHold, nSlide)) continue;
                     double stored = 1000000.0 - step * p;
                     double err = Math.Abs(stored - (R + 0.25));
                     if (err < nbBestAny)
@@ -552,7 +593,7 @@ namespace SinmaiAssist.Cheat
                     for (long p = Math.Max(0, p0 - 64); p <= p0 + 64; p++)
                     {
                         if ((p & 1L) != 0) continue;
-                        if (!CanRealizeGreats(p, nTapTouch, nHold, nSlide)) continue;
+                        if (!CanRealizePenalty(p, nTapTouch, nHold, nSlide)) continue;
                         double stored = 1010000.0 - (gStep * m + bStep * j + sStep * p);
                         double err = Math.Abs(stored - (R + 0.25));
                         if (err < bestAny)
@@ -587,6 +628,21 @@ namespace SinmaiAssist.Cheat
         }
 
         /// <summary>
+        /// 在 _requireGood（FC/Silver）时先占 2 个 Tap/Touch 当 Good，其余用 Great 实现 Δs。
+        /// </summary>
+        private static bool CanRealizePenalty(long p, int c1, int c2, int c3)
+        {
+            if (_requireGood)
+            {
+                if (c1 < 2) return false;
+                p -= 10;   // 两个 Tap Good = 2 * 5(50单位)
+                c1 -= 2;
+                if (p < 0) return false;
+            }
+            return CanRealizeGreats(p, c1, c2, c3);
+        }
+
+        /// <summary>
         /// 判断 Δs = 50*p 能否由各类型 Great 精确组成。
         /// Great 扣分单位为(50分): Tap/Touch=2, Hold=4, Slide=6。p 为偶数时转为 100 分单位 q=p/2，
         /// 币值 1/2/3；贪心先用大币再补 1 币，若 1 币不够则无解。
@@ -612,20 +668,34 @@ namespace SinmaiAssist.Cheat
         private static void AssignScorePenalty(NoteJudge.ETiming[] timing, List<int> slideIdx, List<int> holdIdx,
                                                List<int> tapIdx, List<int> touchIdx, long p)
         {
-            if (p <= 0)
+            if (p <= 0 && !_requireGood)
             {
                 return;
             }
-            long q = p / 2;
-            int s3 = (int)Math.Min(slideIdx.Count, q / 3);
-            long rem = q - 3L * s3;
-            int s2 = (int)Math.Min(holdIdx.Count, rem / 2);
-            long s1 = rem - 2L * s2;
+            long rem = p;
+            int goodCount = 0;
+            if (_requireGood)
+            {
+                int gi = 0;
+                for (int i = 0; i < tapIdx.Count && gi < 2; i++, gi++) timing[tapIdx[i]] = NoteJudge.ETiming.FastGood;
+                for (int i = 0; i < touchIdx.Count && gi < 2; i++, gi++) timing[touchIdx[i]] = NoteJudge.ETiming.FastGood;
+                goodCount = gi;
+                rem -= 5L * goodCount;
+            }
+            if (rem < 0)
+            {
+                rem = 0;
+            }
+            int s3 = (int)Math.Min(slideIdx.Count, rem / 6);
+            rem -= 6L * s3;
+            int s2 = (int)Math.Min(holdIdx.Count, rem / 4);
+            rem -= 4L * s2;
+            long s1 = rem / 2;
 
             for (int i = 0; i < s3; i++) timing[slideIdx[i]] = NoteJudge.ETiming.FastGreat;
             for (int i = 0; i < s2; i++) timing[holdIdx[i]] = NoteJudge.ETiming.FastGreat;
             int placed = 0;
-            for (int i = 0; i < tapIdx.Count && placed < s1; i++, placed++) timing[tapIdx[i]] = NoteJudge.ETiming.FastGreat;
+            for (int i = goodCount; i < tapIdx.Count && placed < s1; i++, placed++) timing[tapIdx[i]] = NoteJudge.ETiming.FastGreat;
             for (int i = 0; i < touchIdx.Count && placed < s1; i++, placed++) timing[touchIdx[i]] = NoteJudge.ETiming.FastGreat;
         }
     }
