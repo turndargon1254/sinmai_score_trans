@@ -10,6 +10,8 @@ public class TransferItem
 
     // 状态：0=AP+ 1=AP 2=FC+ 3=FC；-1=未指定（按可达判定自由生成）
     public int comboStatus = -1;
+    // 目标 DX(deluxe)分；-1=未指定
+    public int dx = -1;
 
     // 运行时填充
     public string name;

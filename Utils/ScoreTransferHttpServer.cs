@@ -304,27 +304,47 @@ namespace SinmaiAssist.Utils
                         continue;
                     }
                     int difficulty = ParseDifficulty(parts[1]);
-                    // 第4列 谱面：sd=1 / dx=0（也支持 sd/dx 文本）；缺省按 musicId>=10000 推断
-                    int scoreType;
-                    if (parts.Length >= 4)
-                    {
-                        string c = parts[3].Trim();
-                        if (c.Equals("sd", StringComparison.OrdinalIgnoreCase)) scoreType = 0;
-                        else if (c.Equals("dx", StringComparison.OrdinalIgnoreCase)) scoreType = 1;
-                        else if (int.TryParse(c, out int ch)) scoreType = ch == 1 ? 0 : 1;
-                        else scoreType = musicId >= 10000 ? 1 : 0;
-                    }
-                    else
-                    {
-                        scoreType = musicId >= 10000 ? 1 : 0;
-                    }
-                    // 第5列 状态：0=AP+ 1=AP 2=FC+ 3=FC；非数字则当作名称
+                    int scoreType = musicId >= 10000 ? 1 : 0;
+                    // 完成度之后的可选字段：状态(ap+/ap/fc+/fc)、dx(整数)、sd/dx(谱面)、名称
                     int comboStatus = -1;
+                    int dx = -1;
                     string name = "";
-                    if (parts.Length >= 5)
+                    for (int j = 3; j < parts.Length; j++)
                     {
-                        if (int.TryParse(parts[4], out int cs) && cs >= 0 && cs <= 3) comboStatus = cs;
-                        else name = parts[4];
+                        string c = parts[j].Trim();
+                        string lc = c.ToLowerInvariant();
+                        if (lc == "sd")
+                        {
+                            scoreType = 0;
+                        }
+                        else if (lc == "dx")
+                        {
+                            scoreType = 1;
+                        }
+                        else if (lc == "ap+")
+                        {
+                            comboStatus = 0;
+                        }
+                        else if (lc == "ap")
+                        {
+                            comboStatus = 1;
+                        }
+                        else if (lc == "fc+")
+                        {
+                            comboStatus = 2;
+                        }
+                        else if (lc == "fc")
+                        {
+                            comboStatus = 3;
+                        }
+                        else if (int.TryParse(c, out int dv))
+                        {
+                            dx = dv;
+                        }
+                        else
+                        {
+                            name = c;
+                        }
                     }
                     TransferItem item = new TransferItem
                     {
@@ -333,6 +353,7 @@ namespace SinmaiAssist.Utils
                         targetAchievement = achievement,
                         scoreType = scoreType,
                         comboStatus = comboStatus,
+                        dx = dx,
                         name = name
                     };
                     items.Add(item);

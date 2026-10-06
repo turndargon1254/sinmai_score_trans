@@ -398,7 +398,7 @@ namespace SinmaiAssist.Cheat
             }
 
             string error;
-            if (!ScoreTransfer.Request(item.musicId, item.scoreType, item.difficulty, item.targetAchievement, item.comboStatus, out error))
+            if (!ScoreTransfer.Request(item.musicId, item.scoreType, item.difficulty, item.targetAchievement, item.comboStatus, item.dx, out error))
             {
                 item.MarkFailed(error);
                 yield break;

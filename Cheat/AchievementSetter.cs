@@ -36,7 +36,67 @@ namespace SinmaiAssist.Cheat
         public static decimal Target = 0m;
         // 期望的组合状态（游戏 PlayComboflagID：4=AP+ 3=AP 2=FC+ 1=FC，-1=不限）
         public static int DesiredCombo = -1;
+        // 目标 DX(deluxe)分；-1=不限
+        public static int TargetDx = -1;
         private static bool _requireGood;
+
+        // 判定 -> DX(deluxe)：Critical=3, Perfect=2, Great=1, Good/Miss=0
+        private static int DeluxeOf(NoteJudge.ETiming t)
+        {
+            switch (t)
+            {
+                case NoteJudge.ETiming.Critical:
+                    return 3;
+                case NoteJudge.ETiming.FastPerfect:
+                case NoteJudge.ETiming.FastPerfect2nd:
+                case NoteJudge.ETiming.LatePerfect:
+                case NoteJudge.ETiming.LatePerfect2nd:
+                    return 2;
+                case NoteJudge.ETiming.FastGreat:
+                case NoteJudge.ETiming.FastGreat2nd:
+                case NoteJudge.ETiming.FastGreat3rd:
+                case NoteJudge.ETiming.LateGreat:
+                case NoteJudge.ETiming.LateGreat2nd:
+                case NoteJudge.ETiming.LateGreat3rd:
+                    return 1;
+                default:
+                    return 0;
+            }
+        }
+
+        /// <summary>
+        /// 在不改变达成率/状态的前提下，把目标 DX 调到位：
+        /// 非断键 Perfect 与 Critical 对达成率同分，可自由互换来改变 DX(+1/个)。
+        /// </summary>
+        private static void ApplyDxTuning(List<NoteData> notes)
+        {
+            if (TargetDx < 0)
+            {
+                return;
+            }
+            long cur = 0;
+            for (int i = 0; i < notes.Count; i++)
+            {
+                cur += DeluxeOf(_plan[notes[i].indexNote]);
+            }
+            long diff = TargetDx - cur;
+            long applied = 0;
+            if (diff > 0)
+            {
+                for (int i = 0; i < notes.Count && applied < diff; i++)
+                {
+                    int idx = notes[i].indexNote;
+                    NoteScore.EScoreType st = GamePlayManager.NoteType2ScoreType(notes[i].type.getEnum());
+                    if (st != NoteScore.EScoreType.Slide && st != NoteScore.EScoreType.Break
+                        && _plan[idx] == NoteJudge.ETiming.FastPerfect)
+                    {
+                        _plan[idx] = NoteJudge.ETiming.Critical;
+                        applied++;
+                    }
+                }
+            }
+            MelonLogger.Msg($"[ScoreTransfer] DX: 目标={TargetDx} 实现={cur + applied} (可调下限~{cur})");
+        }
 
         // 进入谱面后先正常游玩多久(秒)再强制结算。太短服务器会判定不合法而丢弃成绩。
         private static float _playStartTime = -1f;
@@ -368,6 +428,7 @@ namespace SinmaiAssist.Cheat
                         if (j > breakIdx.Count) j = breakIdx.Count;
                         for (int k = 0; k < j; k++) _plan[breakIdx[k]] = NoteJudge.ETiming.FastPerfect;
                     }
+                    ApplyDxTuning(notes);
                     MelonLogger.Msg("[ScoreTransfer] 状态 AP：不产生 Great/Good");
                     return;
                 }
@@ -415,6 +476,8 @@ namespace SinmaiAssist.Cheat
                 for (int i = 0; i < s2; i++) _plan[holdIdx[i]] = NoteJudge.ETiming.FastGreat;
                 long placed = 0;
                 for (int i = goodTaps; i < tapTouchIdx.Count && placed < s1; i++, placed++) _plan[tapTouchIdx[i]] = NoteJudge.ETiming.FastGreat;
+
+                ApplyDxTuning(notes);
 
                 int minIdx = int.MaxValue, maxIdx = int.MinValue;
                 foreach (int key in _plan.Keys)
